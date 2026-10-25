@@ -1,12 +1,14 @@
 import {
   BrowserRouter,
-  Navigate,
   Route,
   Routes,
 } from "react-router-dom";
 
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ListingDetail from "./pages/ListingDetail";
+import ComparePage from "./pages/ComparePage";
 import TenantDashboard from "./pages/TenantDashboard";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -19,7 +21,7 @@ function App() {
 
         <Route
           path="/"
-          element={<Navigate to="/login" />}
+          element={<Landing />}
         />
 
         <Route
@@ -31,6 +33,16 @@ function App() {
           path="/register"
           element={<Register />}
         />
+
+        <Route
+          path="/listings/:id"
+          element={<ListingDetail />}
+        />
+
+        { <Route
+          path="/compare"
+          element={<ComparePage />}
+        />}
 
         <Route
           path="/tenant"

@@ -2,6 +2,15 @@ import mongoose, { Schema } from "mongoose";
 
 export type UserRole = "tenant" | "owner" | "admin";
 
+export interface IVerification {
+  idDocumentUrl?: string;
+  authorityDocumentUrl?: string;
+  submittedAt?: Date;
+  reviewedAt?: Date;
+  reviewNote?: string;
+  revisionRequested?: boolean;
+}
+
 export interface IUser {
   firstName: string;
   lastName: string;
@@ -9,7 +18,22 @@ export interface IUser {
   passwordHash: string;
   defaultRole: UserRole;
   status: "pending" | "active" | "suspended" | "rejected";
+  favorites: mongoose.Types.ObjectId[];
+  history: { listing: mongoose.Types.ObjectId; viewedAt: Date }[];
+  verification?: IVerification;
 }
+
+const verificationSchema = new Schema<IVerification>(
+  {
+    idDocumentUrl: { type: String },
+    authorityDocumentUrl: { type: String },
+    submittedAt: { type: Date },
+    reviewedAt: { type: Date },
+    reviewNote: { type: String },
+    revisionRequested: { type: Boolean },
+  },
+  { _id: false }
+);
 
 const userSchema = new Schema<IUser>(
   {
@@ -50,6 +74,23 @@ const userSchema = new Schema<IUser>(
       enum: ["pending", "active", "suspended", "rejected"],
       default: "active",
     },
+
+    favorites: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Listing" }],
+      default: [],
+    },
+
+    history: {
+      type: [
+        {
+          listing: { type: mongoose.Schema.Types.ObjectId, ref: "Listing" },
+          viewedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
+
+    verification: { type: verificationSchema },
   },
   {
     timestamps: true,

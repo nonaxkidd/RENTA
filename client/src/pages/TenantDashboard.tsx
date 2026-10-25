@@ -1,23 +1,866 @@
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { MapContainer, TileLayer, Marker, Tooltip } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import api from "../services/api";
+import "./TenantDashboard.css";
+
+interface RentaUser {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  role?: string;
+}
+
+interface ApiListing {
+  _id: string;
+  title: string;
+  type: string;
+  barangay: string;
+  price: number;
+  transparency: number;
+  verified: boolean;
+  capacity: number;
+  lat: number;
+  lng: number;
+}
+
+interface HistoryEntry {
+  listing: ApiListing;
+  viewedAt: string;
+}
+
+interface SampleListing {
+  id: number;
+  title: string;
+  type: string;
+  barangay: string;
+  price: number;
+  capacity: number;
+  verified: boolean;
+  lat: number;
+  lng: number;
+}
+
+const sampleListings: SampleListing[] = [
+  { id: 1, title: "Bayanan Garden Rooms", type: "Private room", barangay: "Bayanan", price: 4800, capacity: 1, verified: true, lat: 13.4195, lng: 121.1845 },
+  { id: 2, title: "Luna Residences", type: "Studio unit", barangay: "Ilaya", price: 7200, capacity: 2, verified: true, lat: 13.4128, lng: 121.1812 },
+  { id: 3, title: "Calapan Heights Suite", type: "1BR unit", barangay: "Guinobatan", price: 9500, capacity: 3, verified: true, lat: 13.4295, lng: 121.1705 },
+  { id: 4, title: "Riverside Nest", type: "Private room", barangay: "Silonay", price: 5300, capacity: 1, verified: false, lat: 13.4402, lng: 121.1995 },
+  { id: 5, title: "Sto. Niño Flats", type: "Studio unit", barangay: "Santo Niño", price: 6750, capacity: 2, verified: true, lat: 13.4152, lng: 121.1788 },
+  { id: 6, title: "Masipit Boarding House", type: "Bedspace", barangay: "Masipit", price: 2500, capacity: 1, verified: false, lat: 13.4048, lng: 121.1655 },
+];
+
+const CALAPAN_CENTER: [number, number] = [13.4117, 121.1803];
+
+const TYPE_OPTIONS = ["All types", "Private room", "Studio unit", "1BR unit", "2BR unit", "Bedspace"];
+const PRICE_OPTIONS = [
+  { label: "Any price", min: 0, max: Infinity },
+  { label: "Under ₱5,000", min: 0, max: 5000 },
+  { label: "₱5,000 - ₱8,000", min: 5000, max: 8000 },
+  { label: "Over ₱8,000", min: 8000, max: Infinity },
+];
+const CAPACITY_OPTIONS = ["Any capacity", "1 person", "2 people", "3+ people"];
+
+type ActiveView = "discover" | "saved" | "history" | "notifications" | "account";
+
+/* ---------- LINE ICONS (hand-built, no external library) ---------- */
+
+function IconMenu() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  );
+}
+function IconHome() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 11.5 12 4l9 7.5" />
+      <path d="M5 10v10h5v-6h4v6h5V10" />
+    </svg>
+  );
+}
+function IconHeart() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z" />
+    </svg>
+  );
+}
+function IconClock() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+function IconBell() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 12 6 8z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+function IconUser() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+    </svg>
+  );
+}
+function IconPower() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2v8" />
+      <path d="M6.5 6.5a8 8 0 1 0 11 0" />
+    </svg>
+  );
+}
+function IconBed() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6" />
+      <path d="M3 18v2" />
+      <path d="M21 18v2" />
+      <path d="M7 10V8a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+function IconDoor() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="3" width="14" height="18" rx="1" />
+      <circle cx="14" cy="12" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function IconLayers() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+function IconBuilding() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="1" />
+      <path d="M9 21v-4h6v4" />
+    </svg>
+  );
+}
+
+const TYPE_ICONS: Record<string, () => React.JSX.Element> = {
+  "Private room": IconDoor,
+  "Studio unit": IconLayers,
+  "1BR unit": IconBuilding,
+  "2BR unit": IconBuilding,
+  "Bedspace": IconBed,
+};
+
+function createPinIcon(verified: boolean) {
+  const fill = verified ? "#d7f542" : "#061f29";
+  const dot = verified ? "#061f29" : "#f5f4ed";
+  const svg = `
+    <svg width="28" height="38" viewBox="0 0 28 38" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 24 14 24s14-13.5 14-24C28 6.3 21.7 0 14 0z" fill="${fill}" stroke="#ffffff" stroke-width="1.5"/>
+      <circle cx="14" cy="14" r="5" fill="${dot}"/>
+    </svg>`;
+  return L.divIcon({
+    className: "gps-marker-wrapper",
+    html: svg,
+    iconSize: [28, 38],
+    iconAnchor: [14, 38],
+    popupAnchor: [0, -34],
+  });
+}
+
+function getAuthHeaders() {
+  const token = localStorage.getItem("renta_token");
+  return { headers: { Authorization: `Bearer ${token}` } };
+}
+
+function formatRelativeTime(dateString: string) {
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays} days ago`;
+}
 
 function TenantDashboard() {
   const navigate = useNavigate();
 
+  const storedUser = localStorage.getItem("renta_user");
+  const user: RentaUser = storedUser ? JSON.parse(storedUser) : {};
+  const initial = user.firstName ? user.firstName.charAt(0).toUpperCase() : "T";
+
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const [activeView, setActiveView] = useState<ActiveView>("discover");
+
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState(TYPE_OPTIONS[0]);
+  const [priceFilter, setPriceFilter] = useState(PRICE_OPTIONS[0].label);
+  const [capacityFilter, setCapacityFilter] = useState(CAPACITY_OPTIONS[0]);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
+
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const searchAreaRef = useRef<HTMLDivElement>(null);
+
+  const [realListings, setRealListings] = useState<ApiListing[]>([]);
+  const [realListingsLoading, setRealListingsLoading] = useState(true);
+  const [realListingsError, setRealListingsError] = useState("");
+
+  const [savedListings, setSavedListings] = useState<ApiListing[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [savedError, setSavedError] = useState("");
+  const [savedLoaded, setSavedLoaded] = useState(false);
+
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadListings() {
+      try {
+        const response = await api.get("/listings");
+        if (!cancelled) setRealListings(response.data.listings);
+      } catch {
+        if (!cancelled) setRealListingsError("Couldn't load listings right now.");
+      } finally {
+        if (!cancelled) setRealListingsLoading(false);
+      }
+    }
+
+    loadListings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchAreaRef.current && !searchAreaRef.current.contains(event.target as Node)) {
+        setFiltersOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (activeView !== "saved" || savedLoaded) return;
+
+    let cancelled = false;
+
+    async function loadSaved() {
+      try {
+        setSavedLoading(true);
+        const response = await api.get("/favorites", getAuthHeaders());
+        if (!cancelled) setSavedListings(response.data.favorites);
+      } catch {
+        if (!cancelled) setSavedError("Couldn't load your saved listings.");
+      } finally {
+        if (!cancelled) {
+          setSavedLoading(false);
+          setSavedLoaded(true);
+        }
+      }
+    }
+
+    loadSaved();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, savedLoaded]);
+
+  useEffect(() => {
+    if (activeView !== "history" || historyLoaded) return;
+
+    let cancelled = false;
+
+    async function loadHistory() {
+      try {
+        setHistoryLoading(true);
+        const response = await api.get("/history", getAuthHeaders());
+        if (!cancelled) setHistoryEntries(response.data.history);
+      } catch {
+        if (!cancelled) setHistoryError("Couldn't load your history.");
+      } finally {
+        if (!cancelled) {
+          setHistoryLoading(false);
+          setHistoryLoaded(true);
+        }
+      }
+    }
+
+    loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, historyLoaded]);
+
+  const newListings = realListings.slice(0, 4);
+  const popularListings = useMemo(
+    () => [...realListings].sort((a, b) => b.transparency - a.transparency).slice(0, 4),
+    [realListings]
+  );
+  const generalListings = realListings;
+
   function handleLogout() {
     localStorage.removeItem("renta_token");
     localStorage.removeItem("renta_user");
-
     navigate("/login");
   }
 
-  return (
-    <div>
-      <h1>RENTA</h1>
-      <h2>Tenant Dashboard</h2>
+  function goToDiscover() {
+    setActiveView("discover");
+    setQuery("");
+    setTypeFilter(TYPE_OPTIONS[0]);
+    setPriceFilter(PRICE_OPTIONS[0].label);
+    setCapacityFilter(CAPACITY_OPTIONS[0]);
+    setVerifiedOnly(false);
+    setHasSearched(false);
+  }
 
-      <button onClick={handleLogout}>
-        Logout
-      </button>
+  function goToView(view: ActiveView) {
+    setActiveView(view);
+  }
+
+  function exploreType(type: string) {
+    setActiveView("discover");
+    setTypeFilter(type);
+    setHasSearched(true);
+  }
+
+  const activePriceRange = PRICE_OPTIONS.find((p) => p.label === priceFilter) ?? PRICE_OPTIONS[0];
+
+  const filteredListings = useMemo(() => {
+    return sampleListings.filter((listing) => {
+      const matchesQuery =
+        query.trim() === "" ||
+        listing.title.toLowerCase().includes(query.toLowerCase()) ||
+        listing.barangay.toLowerCase().includes(query.toLowerCase()) ||
+        listing.type.toLowerCase().includes(query.toLowerCase());
+
+      const matchesType = typeFilter === "All types" || listing.type === typeFilter;
+      const matchesPrice = listing.price >= activePriceRange.min && listing.price <= activePriceRange.max;
+      const matchesCapacity =
+        capacityFilter === "Any capacity" ||
+        (capacityFilter === "1 person" && listing.capacity === 1) ||
+        (capacityFilter === "2 people" && listing.capacity === 2) ||
+        (capacityFilter === "3+ people" && listing.capacity >= 3);
+      const matchesVerified = !verifiedOnly || listing.verified;
+
+      return matchesQuery && matchesType && matchesPrice && matchesCapacity && matchesVerified;
+    });
+  }, [query, typeFilter, activePriceRange, capacityFilter, verifiedOnly]);
+
+  function handleSearchSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setHasSearched(true);
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setTypeFilter(TYPE_OPTIONS[0]);
+    setPriceFilter(PRICE_OPTIONS[0].label);
+    setCapacityFilter(CAPACITY_OPTIONS[0]);
+    setVerifiedOnly(false);
+    setHasSearched(false);
+  }
+
+  function renderListingRow(listings: ApiListing[]) {
+    if (realListingsLoading) {
+      return (
+        <div className="bracket-skeleton">
+          {[1, 2, 3].map((item) => (
+            <div className="placeholder-card" key={item}>
+              <div className="placeholder-thumb" />
+              <div className="placeholder-line placeholder-line-wide" />
+              <div className="placeholder-line placeholder-line-narrow" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (listings.length === 0) {
+      return <p className="bracket-empty">{realListingsError || "No listings yet."}</p>;
+    }
+
+    return (
+      <div className="bracket-row">
+        {listings.map((listing) => (
+          <Link
+            to={`/listings/${listing._id}`}
+            state={{ from: "/tenant" }}
+            className="bracket-listing-card"
+            key={listing._id}
+          >
+            <div className="bracket-listing-thumb">
+              <span className="bracket-tour-badge">360° Tour</span>
+              {listing.verified && <span className="bracket-verified-tag">Verified</span>}
+            </div>
+            <div className="bracket-listing-info">
+              <div className="bracket-listing-meta">
+                <span>{listing.type} · {listing.barangay}</span>
+                <span className="bracket-listing-price">₱{listing.price.toLocaleString()}/mo</span>
+              </div>
+              <h3>{listing.title}</h3>
+              <div className="bracket-listing-footer">
+                <span>Up to {listing.capacity} {listing.capacity === 1 ? "person" : "people"}</span>
+                <span className="bracket-listing-score">{listing.transparency}%</span>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    );
+  }
+
+  function renderSavedView() {
+    if (savedLoading) {
+      return (
+        <div className="bracket-skeleton">
+          {[1, 2, 3].map((item) => (
+            <div className="placeholder-card" key={item}>
+              <div className="placeholder-thumb" />
+              <div className="placeholder-line placeholder-line-wide" />
+              <div className="placeholder-line placeholder-line-narrow" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (savedError) {
+      return <p className="bracket-empty">{savedError}</p>;
+    }
+
+    if (savedListings.length === 0) {
+      return (
+        <div className="empty-state">
+          <div className="empty-icon"><IconHeart /></div>
+          <p className="empty-title">No saved listings yet</p>
+          <p className="empty-text">Tap the heart icon on any listing to save it here.</p>
+        </div>
+      );
+    }
+
+    return renderListingRow(savedListings);
+  }
+
+  function renderHistoryView() {
+    if (historyLoading) {
+      return (
+        <div className="bracket-skeleton">
+          {[1, 2, 3].map((item) => (
+            <div className="placeholder-card" key={item}>
+              <div className="placeholder-thumb" />
+              <div className="placeholder-line placeholder-line-wide" />
+              <div className="placeholder-line placeholder-line-narrow" />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (historyError) {
+      return <p className="bracket-empty">{historyError}</p>;
+    }
+
+    if (historyEntries.length === 0) {
+      return (
+        <div className="empty-state">
+          <div className="empty-icon"><IconClock /></div>
+          <p className="empty-title">No viewing history yet</p>
+          <p className="empty-text">Listings you open will show up here so you can find them again.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="bracket-row">
+        {historyEntries.map((entry) => (
+          <Link
+            to={`/listings/${entry.listing._id}`}
+            state={{ from: "/tenant" }}
+            className="bracket-listing-card"
+            key={`${entry.listing._id}-${entry.viewedAt}`}
+          >
+            <div className="bracket-listing-thumb">
+              <span className="bracket-tour-badge">360° Tour</span>
+              {entry.listing.verified && <span className="bracket-verified-tag">Verified</span>}
+            </div>
+            <div className="bracket-listing-info">
+              <div className="bracket-listing-meta">
+                <span>{entry.listing.type} · {entry.listing.barangay}</span>
+                <span className="bracket-listing-price">₱{entry.listing.price.toLocaleString()}/mo</span>
+              </div>
+              <h3>{entry.listing.title}</h3>
+              <div className="bracket-listing-footer">
+                <span>Up to {entry.listing.capacity} {entry.listing.capacity === 1 ? "person" : "people"}</span>
+                <span className="bracket-listing-score">{entry.listing.transparency}%</span>
+              </div>
+              <p className="bracket-viewed-note">Viewed {formatRelativeTime(entry.viewedAt)}</p>
+            </div>
+          </Link>
+        ))}
+      </div>
+    );
+  }
+
+  function renderAccountView() {
+    return (
+      <div className="profile-card">
+        <div className="profile-header">
+          <div className="profile-avatar">{initial}</div>
+          <div>
+            <p className="profile-name">
+              {user.firstName ? `${user.firstName} ${user.lastName ?? ""}` : "Tenant"}
+            </p>
+            <p className="profile-role">Tenant account</p>
+          </div>
+        </div>
+
+        <div className="profile-row">
+          <span className="profile-label">Email</span>
+          <span className="profile-value">{user.email ?? "—"}</span>
+        </div>
+        <div className="profile-row">
+          <span className="profile-label">Account type</span>
+          <span className="profile-value">Prospective tenant</span>
+        </div>
+
+        <button className="profile-logout-btn" onClick={handleLogout}>
+          Log out
+        </button>
+      </div>
+    );
+  }
+
+  const explorableTypes = TYPE_OPTIONS.filter((t) => t !== "All types");
+
+  return (
+    <div className="yt-shell">
+      <header className="yt-topbar">
+        <button className="yt-hamburger" onClick={() => setSidebarExpanded((v) => !v)} aria-label="Toggle menu">
+          <IconMenu />
+        </button>
+        <button className="yt-logo" onClick={goToDiscover}>
+          <span className="logo-circle">R.</span>
+          <span className="yt-logo-text">RENTA</span>
+        </button>
+      </header>
+
+      <div className="yt-body">
+        <aside className={sidebarExpanded ? "yt-sidebar expanded" : "yt-sidebar"}>
+          <div className="yt-sidebar-section">
+            <button
+              className={activeView === "discover" ? "yt-sidebar-item active" : "yt-sidebar-item"}
+              onClick={goToDiscover}
+            >
+              <IconHome />
+              {sidebarExpanded && <span>Discover</span>}
+            </button>
+          </div>
+
+          <div className="yt-sidebar-divider" />
+
+          <div className="yt-sidebar-section">
+            {sidebarExpanded && <span className="yt-sidebar-label">You</span>}
+            <button
+              className={activeView === "saved" ? "yt-sidebar-item active" : "yt-sidebar-item"}
+              onClick={() => goToView("saved")}
+            >
+              <IconHeart />
+              {sidebarExpanded && <span>Saved</span>}
+            </button>
+            <button
+              className={activeView === "history" ? "yt-sidebar-item active" : "yt-sidebar-item"}
+              onClick={() => goToView("history")}
+            >
+              <IconClock />
+              {sidebarExpanded && <span>History</span>}
+            </button>
+            <button
+              className={activeView === "notifications" ? "yt-sidebar-item active" : "yt-sidebar-item"}
+              onClick={() => goToView("notifications")}
+            >
+              <IconBell />
+              {sidebarExpanded && <span>Notifications</span>}
+            </button>
+            <button
+              className={activeView === "account" ? "yt-sidebar-item active" : "yt-sidebar-item"}
+              onClick={() => goToView("account")}
+            >
+              <IconUser />
+              {sidebarExpanded && <span>{user.firstName ?? "Account"}</span>}
+            </button>
+          </div>
+
+          <div className="yt-sidebar-divider" />
+
+          <div className="yt-sidebar-section">
+            {sidebarExpanded && <span className="yt-sidebar-label">Explore</span>}
+            {explorableTypes.map((type) => {
+              const TypeIcon = TYPE_ICONS[type] ?? IconDoor;
+              return (
+                <button key={type} className="yt-sidebar-item" onClick={() => exploreType(type)}>
+                  <TypeIcon />
+                  {sidebarExpanded && <span>{type}</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="yt-sidebar-section yt-sidebar-bottom">
+            <button className="yt-sidebar-item" onClick={handleLogout}>
+              <IconPower />
+              {sidebarExpanded && <span>Log out</span>}
+            </button>
+          </div>
+        </aside>
+
+        <main className="dash-main">
+          {activeView === "discover" && (
+            <>
+              <header className="dash-topbar" ref={searchAreaRef}>
+                <div className="search-align-row">
+                  <form
+                    className="dash-search"
+                    onSubmit={handleSearchSubmit}
+                    onClick={() => setFiltersOpen(true)}
+                  >
+                    <span className="search-icon">🔍</span>
+                    <input
+                      type="text"
+                      placeholder="Search barangay, landmark, or type"
+                      value={query}
+                      onFocus={() => setFiltersOpen(true)}
+                      onChange={(event) => {
+                        setQuery(event.target.value);
+                        setHasSearched(true);
+                      }}
+                    />
+                    {query && (
+                      <button
+                        type="button"
+                        className="search-clear"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setQuery("");
+                        }}
+                        aria-label="Clear search"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </form>
+                </div>
+
+                {filtersOpen && (
+                  <div className="filter-row">
+                    <select value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setHasSearched(true); }}>
+                      {TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+
+                    <select value={priceFilter} onChange={(e) => { setPriceFilter(e.target.value); setHasSearched(true); }}>
+                      {PRICE_OPTIONS.map((option) => <option key={option.label} value={option.label}>{option.label}</option>)}
+                    </select>
+
+                    <select value={capacityFilter} onChange={(e) => { setCapacityFilter(e.target.value); setHasSearched(true); }}>
+                      {CAPACITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+
+                    <button
+                      type="button"
+                      className={verifiedOnly ? "filter-pill active" : "filter-pill"}
+                      onClick={() => { setVerifiedOnly(!verifiedOnly); setHasSearched(true); }}
+                    >
+                      Verified owners only
+                    </button>
+
+                    {hasSearched && (
+                      <button type="button" className="filter-clear" onClick={clearFilters}>
+                        Clear all
+                      </button>
+                    )}
+                  </div>
+                )}
+              </header>
+
+              {hasSearched ? (
+                <section className="search-results" id="search-results-section">
+                  <div className="results-heading">
+                    <h2>{filteredListings.length} sample {filteredListings.length === 1 ? "match" : "matches"}</h2>
+                    <span className="sample-note">Showing sample data — search isn't connected to live listings yet.</span>
+
+                    <div className="view-toggle">
+                      <button className={viewMode === "list" ? "toggle-btn active" : "toggle-btn"} onClick={() => setViewMode("list")}>List</button>
+                      <button className={viewMode === "map" ? "toggle-btn active" : "toggle-btn"} onClick={() => setViewMode("map")}>Map</button>
+                    </div>
+                  </div>
+
+                  {filteredListings.length === 0 ? (
+                    <div className="empty-state">
+                      <div className="empty-icon">🔍</div>
+                      <p className="empty-title">No matches found</p>
+                      <p className="empty-text">Try a different search term or clear your filters.</p>
+                    </div>
+                  ) : viewMode === "list" ? (
+                    <div className="results-grid">
+                      {filteredListings.map((listing) => (
+                        <div className="result-card" key={listing.id}>
+                          <div className="result-thumb">
+                            {listing.verified && <span className="verified-badge">Verified</span>}
+                          </div>
+                          <div className="result-info">
+                            <div className="result-meta">
+                              <span>{listing.type} · Brgy. {listing.barangay}</span>
+                              <span className="result-price">₱{listing.price.toLocaleString()}/mo</span>
+                            </div>
+                            <h3>{listing.title}</h3>
+                            <span className="result-capacity">Up to {listing.capacity} {listing.capacity === 1 ? "person" : "people"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="map-split">
+                      <div className="map-list-column">
+                        {filteredListings.map((listing) => (
+                          <div className="compact-card" key={listing.id}>
+                            {listing.verified && <span className="compact-verified">Verified</span>}
+                            <h4>{listing.title}</h4>
+                            <span className="compact-meta">{listing.type} · Brgy. {listing.barangay}</span>
+                            <span className="compact-price">₱{listing.price.toLocaleString()}/mo</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="map-container-wrap">
+                        <span className="map-badge">Calapan City · Approximate map</span>
+                        <MapContainer center={CALAPAN_CENTER} zoom={13} scrollWheelZoom={true} style={{ height: "500px", width: "100%", borderRadius: "18px" }}>
+                          <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          {filteredListings.map((listing) => (
+                            <Marker key={listing.id} position={[listing.lat, listing.lng]} icon={createPinIcon(listing.verified)}>
+                              <Tooltip direction="top" offset={[0, -34]} opacity={1} className="listing-tooltip">
+                                <strong>{listing.title}</strong><br />
+                                {listing.type} · Brgy. {listing.barangay}<br />
+                                ₱{listing.price.toLocaleString()}/mo
+                              </Tooltip>
+                            </Marker>
+                          ))}
+                        </MapContainer>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              ) : (
+                <>
+                  <div className="dash-welcome">
+                    <p className="dash-eyebrow">TENANT DASHBOARD</p>
+                    <h1>Welcome back{user.firstName ? `, ${user.firstName}` : ""}.</h1>
+                    <p className="dash-subtext">Browse what's live on RENTA right now.</p>
+                  </div>
+
+                  <section className="listing-bracket">
+                    <div className="bracket-heading">
+                      <h2>New</h2>
+                      <span className="bracket-sub">Most recently added</span>
+                    </div>
+                    {renderListingRow(newListings)}
+                  </section>
+
+                  <section className="listing-bracket">
+                    <div className="bracket-heading">
+                      <h2>Popular</h2>
+                      <span className="bracket-sub">Ranked by transparency score</span>
+                    </div>
+                    {renderListingRow(popularListings)}
+                  </section>
+
+                  <section className="listing-bracket">
+                    <div className="bracket-heading">
+                      <h2>General</h2>
+                      <span className="bracket-sub">All active listings</span>
+                    </div>
+                    {renderListingRow(generalListings)}
+                  </section>
+                </>
+              )}
+            </>
+          )}
+
+          {activeView === "saved" && (
+            <>
+              <div className="dash-welcome">
+                <p className="dash-eyebrow">YOUR LISTINGS</p>
+                <h1>Saved</h1>
+                <p className="dash-subtext">Listings you've bookmarked for later.</p>
+              </div>
+              {renderSavedView()}
+            </>
+          )}
+
+          {activeView === "history" && (
+            <>
+              <div className="dash-welcome">
+                <p className="dash-eyebrow">YOUR LISTINGS</p>
+                <h1>History</h1>
+                <p className="dash-subtext">Listings you've recently viewed.</p>
+              </div>
+              {renderHistoryView()}
+            </>
+          )}
+
+          {activeView === "notifications" && (
+            <>
+              <div className="dash-welcome">
+                <p className="dash-eyebrow">YOUR LISTINGS</p>
+                <h1>Notifications</h1>
+                <p className="dash-subtext">Updates about your account and saved listings.</p>
+              </div>
+              <div className="empty-state">
+                <div className="empty-icon"><IconBell /></div>
+                <p className="empty-title">No notifications yet</p>
+                <p className="empty-text">You'll see updates here once RENTA's notification system is live.</p>
+              </div>
+            </>
+          )}
+
+          {activeView === "account" && (
+            <>
+              <div className="dash-welcome">
+                <p className="dash-eyebrow">YOUR LISTINGS</p>
+                <h1>Account</h1>
+                <p className="dash-subtext">Your RENTA profile.</p>
+              </div>
+              {renderAccountView()}
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

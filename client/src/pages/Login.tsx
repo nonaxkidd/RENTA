@@ -6,6 +6,7 @@ import {
 } from "react-router-dom";
 
 import api from "../services/api";
+import "./Login.css";
 
 function Login() {
   const navigate = useNavigate();
@@ -49,49 +50,157 @@ function Login() {
   }
 
   return (
-    <div>
-      <h1>RENTA</h1>
+    <div className="login-page">
 
-      <h2>Login</h2>
+      {/* Left branding section */}
+      <div className="login-brand">
 
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Email</label>
-
-          <input
-            type="email"
-            value={email}
-            onChange={(event) =>
-              setEmail(event.target.value)
-            }
-            required
-          />
+        <div className="login-logo">
+          <span className="logo-circle">R.</span>
+          <span className="logo-name">RENTA</span>
         </div>
 
-        <div>
-          <label>Password</label>
+        <div className="login-brand-content">
+          <p className="eyebrow">
+            LONG-TERM RENTALS · CALAPAN CITY
+          </p>
 
-          <input
-            type="password"
-            value={password}
-            onChange={(event) =>
-              setPassword(event.target.value)
-            }
-            required
-          />
+          <h1>
+            Find your next place.
+            <br />
+            <span>Know it</span> before you go.
+          </h1>
+
+          <p className="brand-description">
+            Discover verified long-term rentals with
+            transparent listing details, approximate
+            locations, and immersive 360° views.
+          </p>
         </div>
 
-        <button type="submit">
-          Login
-        </button>
-      </form>
-        <p>
-        Don't have an account?{" "}
-        <Link to="/register">
-            Register
-        </Link>
-        </p>
-      {message && <p>{message}</p>}
+        <div className="login-footer">
+          <span>RENTA</span>
+          <span>•</span>
+          <span>CALAPAN CITY</span>
+        </div>
+
+      </div>
+
+
+      {/* Right login section */}
+      <div className="login-panel">
+
+        <div className="login-card">
+
+          <div className="mobile-logo">
+            <span className="logo-circle">R.</span>
+            <span className="logo-name">RENTA</span>
+          </div>
+
+          <div className="login-heading">
+            <p className="login-eyebrow">
+              WELCOME BACK
+            </p>
+
+            <h2>Sign in</h2>
+
+            <p>
+              Access your RENTA account.
+            </p>
+          </div>
+
+
+          <form
+            className="login-form"
+            onSubmit={handleSubmit}
+          >
+
+            <div className="form-group">
+              <label htmlFor="email">
+                Email
+              </label>
+
+              <input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
+                required
+              />
+            </div>
+
+
+            <div className="form-group">
+              <div className="password-label">
+                <label htmlFor="password">
+                  Password
+                </label>
+
+                <button
+                  type="button"
+                  className="forgot-button"
+                  onClick={() =>
+                    setMessage(
+                      "Password recovery will be available soon."
+                    )
+                  }
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
+                required
+              />
+            </div>
+
+
+            {message && (
+              <div className="login-message">
+                {message}
+              </div>
+            )}
+
+
+            <button
+              type="submit"
+              className="login-button"
+            >
+              <span>Sign in</span>
+              <span className="button-arrow">→</span>
+            </button>
+
+          </form>
+
+
+          <div className="register-prompt">
+            <span>Don't have an account?</span>
+
+            <Link to="/register">
+              Create an account
+            </Link>
+          </div>
+
+
+          <p className="login-note">
+            By continuing, you agree to use RENTA
+            responsibly and provide accurate information.
+          </p>
+
+        </div>
+
+      </div>
+
     </div>
   );
 }

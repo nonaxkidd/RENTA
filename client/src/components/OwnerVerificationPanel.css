@@ -1,0 +1,114 @@
+.ovp-card {
+  background: #ffffff;
+  border: 1px solid #e2ded0;
+  border-radius: 18px;
+  padding: 26px 28px;
+  max-width: 480px;
+  margin-top: 20px;
+  color: #102a32;
+  font-family: "Inter", sans-serif;
+}
+
+.ovp-title {
+  font-size: 18px;
+  margin: 0 0 14px;
+  color: #102a32;
+}
+
+.ovp-muted {
+  color: #71858a;
+  font-size: 13px;
+  margin: 0;
+}
+
+.ovp-banner {
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+
+.ovp-banner.good {
+  background: rgba(215, 245, 66, 0.25);
+  color: #4a5c0e;
+}
+
+.ovp-banner.warn {
+  background: #fff8e1;
+  color: #7a5c00;
+}
+
+.ovp-banner.bad {
+  background: #fdecea;
+  color: #b3261e;
+}
+
+.ovp-link-btn {
+  border: none;
+  background: transparent;
+  color: #061f29;
+  font-weight: 700;
+  font-size: 13px;
+  font-family: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.ovp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ovp-warning {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #7a5c00;
+  background: #fff8e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 6px;
+}
+
+.ovp-form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #102a32;
+  margin-top: 6px;
+}
+
+.ovp-form input {
+  border: 1px solid #d4dcda;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #102a32;
+  background: #ffffff;
+}
+
+.ovp-error {
+  color: #b3261e;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.ovp-submit {
+  margin-top: 12px;
+  background: #d7f542;
+  color: #061f29;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ovp-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
