@@ -4,6 +4,9 @@ import { MapContainer, TileLayer, Marker, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../services/api";
+import { CompareBar, CompareToggle } from "../components/CompareWidgets";
+import type { CompareItem } from "../components/CompareWidgets";
+import "../components/CompareWidgets.css";
 import "./TenantDashboard.css";
 
 interface RentaUser {
@@ -27,7 +30,7 @@ interface ApiListing {
 }
 
 interface HistoryEntry {
-  listing: ApiListing;
+  listing: ApiListing | null;
   viewedAt: string;
 }
 
@@ -62,6 +65,9 @@ const PRICE_OPTIONS = [
   { label: "Over ₱8,000", min: 8000, max: Infinity },
 ];
 const CAPACITY_OPTIONS = ["Any capacity", "1 person", "2 people", "3+ people"];
+
+const COMPARE_KEY = "renta_compare";
+const COMPARE_LIMIT = 2;
 
 type ActiveView = "discover" | "saved" | "history" | "notifications" | "account";
 
@@ -159,7 +165,7 @@ function IconBuilding() {
   );
 }
 
-const TYPE_ICONS: Record<string, () => React.JSX.Element> = {
+const TYPE_ICONS: Record<string, () => React.ReactElement> = {
   "Private room": IconDoor,
   "Studio unit": IconLayers,
   "1BR unit": IconBuilding,
@@ -201,6 +207,23 @@ function formatRelativeTime(dateString: string) {
   return `${diffDays} days ago`;
 }
 
+// Selected comparison listings live in sessionStorage, so they survive
+// going to the compare page and coming back (but not closing the tab).
+function loadCompare(): CompareItem[] {
+  try {
+    const raw = sessionStorage.getItem(COMPARE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item) => item && typeof item.id === "string" && typeof item.title === "string")
+      .slice(0, COMPARE_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
 function TenantDashboard() {
   const navigate = useNavigate();
 
@@ -236,6 +259,8 @@ function TenantDashboard() {
   const [historyError, setHistoryError] = useState("");
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
+  const [compareItems, setCompareItems] = useState<CompareItem[]>(loadCompare);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -265,6 +290,10 @@ function TenantDashboard() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    sessionStorage.setItem(COMPARE_KEY, JSON.stringify(compareItems));
+  }, [compareItems]);
 
   useEffect(() => {
     if (activeView !== "saved" || savedLoaded) return;
@@ -328,6 +357,7 @@ function TenantDashboard() {
   function handleLogout() {
     localStorage.removeItem("renta_token");
     localStorage.removeItem("renta_user");
+    sessionStorage.removeItem(COMPARE_KEY);
     navigate("/login");
   }
 
@@ -349,6 +379,27 @@ function TenantDashboard() {
     setActiveView("discover");
     setTypeFilter(type);
     setHasSearched(true);
+  }
+
+  /* ----- COMPARE ----- */
+
+  function toggleCompare(listing: ApiListing) {
+    setCompareItems((current) => {
+      if (current.some((item) => item.id === listing._id)) {
+        return current.filter((item) => item.id !== listing._id);
+      }
+      if (current.length >= COMPARE_LIMIT) return current;
+      return [...current, { id: listing._id, title: listing.title }];
+    });
+  }
+
+  function removeCompare(id: string) {
+    setCompareItems((current) => current.filter((item) => item.id !== id));
+  }
+
+  function goCompare() {
+    if (compareItems.length !== COMPARE_LIMIT) return;
+    navigate(`/compare?a=${compareItems[0].id}&b=${compareItems[1].id}`);
   }
 
   const activePriceRange = PRICE_OPTIONS.find((p) => p.label === priceFilter) ?? PRICE_OPTIONS[0];
@@ -388,6 +439,44 @@ function TenantDashboard() {
     setHasSearched(false);
   }
 
+  function renderCard(listing: ApiListing, key: string, viewedAt?: string) {
+    const selected = compareItems.some((item) => item.id === listing._id);
+    const limitReached = !selected && compareItems.length >= COMPARE_LIMIT;
+
+    return (
+      <div className="cmp-card-wrap" key={key}>
+        <Link
+          to={`/listings/${listing._id}`}
+          state={{ from: "/tenant" }}
+          className="bracket-listing-card"
+        >
+          <div className="bracket-listing-thumb">
+            <span className="bracket-tour-badge">360° Tour</span>
+            {listing.verified && <span className="bracket-verified-tag">Verified</span>}
+          </div>
+          <div className="bracket-listing-info">
+            <div className="bracket-listing-meta">
+              <span>{listing.type} · {listing.barangay}</span>
+              <span className="bracket-listing-price">₱{listing.price.toLocaleString()}/mo</span>
+            </div>
+            <h3>{listing.title}</h3>
+            <div className="bracket-listing-footer">
+              <span>Up to {listing.capacity} {listing.capacity === 1 ? "person" : "people"}</span>
+              <span className="bracket-listing-score">{listing.transparency}%</span>
+            </div>
+            {viewedAt && <p className="bracket-viewed-note">Viewed {formatRelativeTime(viewedAt)}</p>}
+          </div>
+        </Link>
+
+        <CompareToggle
+          selected={selected}
+          disabled={limitReached}
+          onToggle={() => toggleCompare(listing)}
+        />
+      </div>
+    );
+  }
+
   function renderListingRow(listings: ApiListing[]) {
     if (realListingsLoading) {
       return (
@@ -409,30 +498,7 @@ function TenantDashboard() {
 
     return (
       <div className="bracket-row">
-        {listings.map((listing) => (
-          <Link
-            to={`/listings/${listing._id}`}
-            state={{ from: "/tenant" }}
-            className="bracket-listing-card"
-            key={listing._id}
-          >
-            <div className="bracket-listing-thumb">
-              <span className="bracket-tour-badge">360° Tour</span>
-              {listing.verified && <span className="bracket-verified-tag">Verified</span>}
-            </div>
-            <div className="bracket-listing-info">
-              <div className="bracket-listing-meta">
-                <span>{listing.type} · {listing.barangay}</span>
-                <span className="bracket-listing-price">₱{listing.price.toLocaleString()}/mo</span>
-              </div>
-              <h3>{listing.title}</h3>
-              <div className="bracket-listing-footer">
-                <span>Up to {listing.capacity} {listing.capacity === 1 ? "person" : "people"}</span>
-                <span className="bracket-listing-score">{listing.transparency}%</span>
-              </div>
-            </div>
-          </Link>
-        ))}
+        {listings.map((listing) => renderCard(listing, listing._id))}
       </div>
     );
   }
@@ -466,7 +532,11 @@ function TenantDashboard() {
       );
     }
 
-    return renderListingRow(savedListings);
+    return (
+      <div className="bracket-row">
+        {savedListings.map((listing) => renderCard(listing, listing._id))}
+      </div>
+    );
   }
 
   function renderHistoryView() {
@@ -488,7 +558,12 @@ function TenantDashboard() {
       return <p className="bracket-empty">{historyError}</p>;
     }
 
-    if (historyEntries.length === 0) {
+    // Skip entries whose listing no longer exists (e.g. after re-seeding)
+    const validEntries = historyEntries.filter(
+      (entry): entry is HistoryEntry & { listing: ApiListing } => entry.listing !== null
+    );
+
+    if (validEntries.length === 0) {
       return (
         <div className="empty-state">
           <div className="empty-icon"><IconClock /></div>
@@ -500,31 +575,9 @@ function TenantDashboard() {
 
     return (
       <div className="bracket-row">
-        {historyEntries.map((entry) => (
-          <Link
-            to={`/listings/${entry.listing._id}`}
-            state={{ from: "/tenant" }}
-            className="bracket-listing-card"
-            key={`${entry.listing._id}-${entry.viewedAt}`}
-          >
-            <div className="bracket-listing-thumb">
-              <span className="bracket-tour-badge">360° Tour</span>
-              {entry.listing.verified && <span className="bracket-verified-tag">Verified</span>}
-            </div>
-            <div className="bracket-listing-info">
-              <div className="bracket-listing-meta">
-                <span>{entry.listing.type} · {entry.listing.barangay}</span>
-                <span className="bracket-listing-price">₱{entry.listing.price.toLocaleString()}/mo</span>
-              </div>
-              <h3>{entry.listing.title}</h3>
-              <div className="bracket-listing-footer">
-                <span>Up to {entry.listing.capacity} {entry.listing.capacity === 1 ? "person" : "people"}</span>
-                <span className="bracket-listing-score">{entry.listing.transparency}%</span>
-              </div>
-              <p className="bracket-viewed-note">Viewed {formatRelativeTime(entry.viewedAt)}</p>
-            </div>
-          </Link>
-        ))}
+        {validEntries.map((entry) =>
+          renderCard(entry.listing, `${entry.listing._id}-${entry.viewedAt}`, entry.viewedAt)
+        )}
       </div>
     );
   }
@@ -861,6 +914,13 @@ function TenantDashboard() {
           )}
         </main>
       </div>
+
+      <CompareBar
+        items={compareItems}
+        onRemove={removeCompare}
+        onClear={() => setCompareItems([])}
+        onCompare={goCompare}
+      />
     </div>
   );
 }

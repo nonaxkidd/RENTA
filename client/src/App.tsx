@@ -39,10 +39,14 @@ function App() {
           element={<ListingDetail />}
         />
 
-        { <Route
+        <Route
           path="/compare"
-          element={<ComparePage />}
-        />}
+          element={
+            <ProtectedRoute allowedRole="tenant">
+              <ComparePage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="/tenant"

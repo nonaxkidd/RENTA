@@ -1,0 +1,178 @@
+/* Card wrapper: lets the Compare button sit on top of the card link
+   without nesting a button inside an <a> */
+
+.cmp-card-wrap {
+  position: relative;
+  transition: transform 0.15s ease;
+}
+
+.cmp-card-wrap:hover {
+  transform: translateY(-3px);
+}
+
+.cmp-card-wrap:hover .bracket-listing-card {
+  box-shadow: 0 12px 24px rgba(6, 31, 41, 0.08);
+}
+
+/* The wrapper handles the lift now, so the link itself stays put */
+.cmp-card-wrap .bracket-listing-card:hover {
+  transform: none;
+}
+
+/* Toggle button (sits at the bottom-right of the 200px photo area) */
+
+.cmp-toggle {
+  position: absolute;
+  top: 158px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: rgba(255, 255, 255, 0.95);
+  color: #061f29;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: "Inter", sans-serif;
+  padding: 7px 12px 7px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.cmp-toggle-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 2px solid #061f29;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #061f29;
+}
+
+.cmp-toggle.selected {
+  background: #d7f542;
+}
+
+.cmp-toggle.selected .cmp-toggle-box {
+  background: #061f29;
+  color: #d7f542;
+}
+
+.cmp-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Floating compare bar */
+
+.cmp-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 150;
+  width: calc(100% - 40px);
+  max-width: 760px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #061f29;
+  color: #f5f4ed;
+  padding: 12px 14px 12px 18px;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  font-family: "Inter", sans-serif;
+}
+
+.cmp-bar-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cmp-bar-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 244, 237, 0.1);
+  border-radius: 999px;
+  padding: 5px 6px 5px 12px;
+  font-size: 13px;
+  max-width: 220px;
+}
+
+.cmp-bar-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-bar-remove {
+  border: none;
+  background: rgba(245, 244, 237, 0.15);
+  color: #f5f4ed;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cmp-bar-hint {
+  font-size: 12px;
+  color: rgba(245, 244, 237, 0.6);
+}
+
+.cmp-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.cmp-bar-clear {
+  border: none;
+  background: transparent;
+  color: rgba(245, 244, 237, 0.7);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.cmp-bar-go {
+  border: none;
+  background: #d7f542;
+  color: #061f29;
+  font-weight: 800;
+  font-size: 13px;
+  font-family: inherit;
+  padding: 10px 18px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.cmp-bar-go:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .cmp-bar {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: 12px;
+  }
+
+  .cmp-bar-actions {
+    justify-content: space-between;
+  }
+}
