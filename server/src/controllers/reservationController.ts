@@ -7,6 +7,9 @@ import {
   IReservation,
 } from "../models/Reservation";
 import { Listing } from "../models/Listing";
+import { User } from "../models/User";
+import { notify } from "../services/notify";
+import { requireObjectId } from "../utils/params";
 
 const PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -17,13 +20,6 @@ const ACTIVE_STATUSES = [
 
 function actorId(req: Request): string | undefined {
   return req.auth?.userId;
-}
-
-// Normalize Express 5 route parameters.
-function getRouteParam(
-  value: string | string[] | undefined
-): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function validId(value: string | undefined): value is string {
@@ -55,7 +51,8 @@ async function expireOverdueRequests(unitId?: string): Promise<void> {
 export async function createReservation(req: Request, res: Response) {
   try {
     const tenantId = actorId(req);
-    const listingId = getRouteParam(req.params.listingId);
+    const listingId = requireObjectId(req, res, "listingId");
+    if (!listingId) return;
 
     const {
       intendedMoveIn,
@@ -65,7 +62,7 @@ export async function createReservation(req: Request, res: Response) {
       notes,
     } = req.body ?? {};
 
-    if (!validId(tenantId) || !validId(listingId)) {
+    if (!validId(tenantId)) {
       return res.status(400).json({
         message: "Invalid tenant or listing.",
       });
@@ -111,13 +108,22 @@ export async function createReservation(req: Request, res: Response) {
     }
 
     const listing = await Listing.findById(listingId).select(
-      "title capacity available ownerId"
+      "title capacity available ownerId archivedAt verified"
     );
 
     if (!listing) {
       return res.status(404).json({
         message: "Listing not found.",
       });
+    }
+
+    if (listing.archivedAt) {
+      return res.status(404).json({ message: "Listing not found." });
+    }
+
+    const owner = await User.findById(listing.ownerId).select("status");
+    if (!listing.verified || !owner || owner.status !== "active") {
+      return res.status(409).json({ message: "This listing is not approved yet." });
     }
 
     if (!listing.ownerId) {
@@ -163,6 +169,13 @@ export async function createReservation(req: Request, res: Response) {
         $lt: reservation.serverTimestamp,
       },
     });
+
+    await notify(
+      listing.ownerId,
+      "reservation_requested",
+      "New reservation request",
+      `A tenant requested ${listing.title}.`
+    );
 
     return res.status(201).json({
       reservation,
@@ -313,7 +326,8 @@ export async function getOwnerReservations(req: Request, res: Response) {
 export async function decideReservation(req: Request, res: Response) {
   try {
     const ownerId = actorId(req);
-    const id = getRouteParam(req.params.id);
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
 
     const { decision, responseNote } = req.body ?? {};
 
@@ -344,6 +358,12 @@ export async function decideReservation(req: Request, res: Response) {
       });
     }
 
+    if (decision === "reject" && (typeof responseNote !== "string" || !responseNote.trim())) {
+      return res.status(400).json({
+        message: "A comment is required when you disapprove a reservation.",
+      });
+    }
+
     let reservation = await Reservation.findById(id);
 
     if (!reservation) {
@@ -355,7 +375,7 @@ export async function decideReservation(req: Request, res: Response) {
     const listing = await Listing.findOne({
       _id: reservation.unitId,
       ownerId: new mongoose.Types.ObjectId(ownerId),
-    }).select("_id available");
+    }).select("_id available price");
 
     if (!listing) {
       return res.status(403).json({
@@ -423,6 +443,7 @@ export async function decideReservation(req: Request, res: Response) {
           "Listing was no longer available when the owner reviewed the request.";
       } else {
         reservation.queueStatus = "payment_pending";
+        reservation.downPaymentAmount = listing.price;
 
         reservation.paymentDeadlineAt = new Date(
           now.getTime() + PAYMENT_WINDOW_MS
@@ -435,10 +456,19 @@ export async function decideReservation(req: Request, res: Response) {
 
     await reservation.save();
 
+    await notify(
+      reservation.tenantId,
+      decision === "approve" ? "reservation_approved" : "reservation_rejected",
+      decision === "approve" ? "Reservation approved" : "Reservation declined",
+      decision === "approve"
+        ? "The owner approved your request. Pay the one-month down payment to reserve the listing."
+        : "The owner declined your reservation request."
+    );
+
     return res.json({
       message:
         decision === "approve"
-          ? "Request approved. The 24-hour test-payment window has started; payment checkout is not connected yet."
+          ? "Request approved. The listing stays available until the tenant pays the one-month down payment."
           : "Request rejected. The next request in the FIFO queue may now be reviewed.",
       reservation,
     });
@@ -455,7 +485,8 @@ export async function decideReservation(req: Request, res: Response) {
 export async function cancelReservation(req: Request, res: Response) {
   try {
     const tenantId = actorId(req);
-    const id = getRouteParam(req.params.id);
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
 
     if (!validId(tenantId)) {
       return res.status(401).json({

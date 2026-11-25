@@ -3,6 +3,8 @@ import type { SyntheticEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import api from "../services/api";
+import { isGmail, isPhMobile } from "../utils/contact";
+import { homeForRole } from "../utils/roles";
 import "./Login.css";
 import "./Register.css";
 
@@ -12,12 +14,21 @@ function Register() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<"tenant" | "owner">("tenant");
+  const [otpCode, setOtpCode] = useState("");
+  const [needsOtp, setNeedsOtp] = useState(false);
 
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  function finishLogin(token: string, user: { role?: string }) {
+    localStorage.setItem("renta_token", token);
+    localStorage.setItem("renta_user", JSON.stringify(user));
+    navigate(homeForRole(user.role));
+  }
 
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,6 +40,16 @@ function Register() {
       return;
     }
 
+    if (!isGmail(email)) {
+      setMessage("Use a Gmail address, like name@gmail.com.");
+      return;
+    }
+
+    if (!isPhMobile(phone)) {
+      setMessage("Use a Philippine mobile number: 09XXXXXXXXX or +639XXXXXXXXX.");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -36,20 +57,14 @@ function Register() {
         firstName,
         lastName,
         email,
+        phone,
         password,
         role,
       });
 
-      if (response.status === 201) {
-        if (role === "owner") {
-          alert(
-            "Owner registration successful. Your account is pending verification."
-          );
-        } else {
-          alert("Registration successful. You can now log in.");
-        }
-
-        navigate("/login");
+      if (response.data?.needsOtp) {
+        setNeedsOtp(true);
+        setMessage(response.data.message || "Check your Gmail for a 6-digit code.");
       }
     } catch (error: any) {
       setMessage(
@@ -58,6 +73,34 @@ function Register() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleVerifyOtp(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+
+    try {
+      setLoading(true);
+      const response = await api.post("/auth/verify-otp", {
+        email: email.trim(),
+        code: otpCode.trim(),
+      });
+      finishLogin(response.data.token, response.data.user);
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || "That code could not be verified.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setMessage("");
+    try {
+      const response = await api.post("/auth/resend-otp", { email: email.trim() });
+      setMessage(response.data.message || "A new code was sent.");
+    } catch (error: any) {
+      setMessage(error.response?.data?.message || "Could not resend the code.");
     }
   }
 
@@ -82,7 +125,7 @@ function Register() {
           <p className="brand-description">
             Whether you're searching for your next place or listing one,
             RENTA gives you transparent details, verified information, and
-            immersive 360° views from day one.
+            photos from day one.
           </p>
         </div>
 
@@ -96,6 +139,7 @@ function Register() {
       {/* RIGHT SIDE — form panel */}
       <div className="login-panel">
         <div className="login-card register-card">
+          <Link to="/" className="auth-back">← Back to home</Link>
           <div className="mobile-logo">
             <span className="logo-circle">R.</span>
             <span className="logo-name">RENTA</span>
@@ -107,6 +151,30 @@ function Register() {
             <p>Join RENTA to discover or list a rental.</p>
           </div>
 
+          {needsOtp ? (
+            <form className="login-form register-form" onSubmit={handleVerifyOtp}>
+              <div className="form-group">
+                <label htmlFor="otp">Gmail verification code</label>
+                <input
+                  id="otp"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="6-digit code"
+                  value={otpCode}
+                  onChange={(event) => setOtpCode(event.target.value)}
+                  required
+                />
+              </div>
+              {message && <div className="login-message">{message}</div>}
+              <button type="submit" className="login-button" disabled={loading}>
+                <span>{loading ? "Checking..." : "Verify Gmail"}</span>
+                <span className="button-arrow">→</span>
+              </button>
+              <button type="button" className="login-button" onClick={handleResend}>
+                <span>Resend code</span>
+              </button>
+            </form>
+          ) : (
           <form className="login-form register-form" onSubmit={handleSubmit}>
             <div className="name-row">
               <div className="form-group">
@@ -139,9 +207,21 @@ function Register() {
               <input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder="name@gmail.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="phone">Contact number</label>
+              <input
+                id="phone"
+                type="tel"
+                placeholder="09XXXXXXXXX"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
                 required
               />
             </div>
@@ -203,6 +283,7 @@ function Register() {
               <span className="button-arrow">→</span>
             </button>
           </form>
+          )}
 
           <div className="register-prompt">
             <span>Already have an account?</span>

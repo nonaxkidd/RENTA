@@ -1,10 +1,15 @@
 import mongoose, { Schema } from "mongoose";
 
-export type UserRole = "tenant" | "owner" | "admin";
+export type UserRole = "tenant" | "owner" | "admin" | "superadmin";
+export type UserStatus = "pending" | "active" | "suspended" | "rejected" | "archived";
 
 export interface IVerification {
   idDocumentUrl?: string;
   authorityDocumentUrl?: string;
+  idDocumentKey?: string;
+  idDocumentMime?: string;
+  authorityDocumentKey?: string;
+  authorityDocumentMime?: string;
   submittedAt?: Date;
   reviewedAt?: Date;
   reviewNote?: string;
@@ -15,9 +20,14 @@ export interface IUser {
   firstName: string;
   lastName: string;
   email: string;
+  phone?: string;
   passwordHash: string;
   defaultRole: UserRole;
-  status: "pending" | "active" | "suspended" | "rejected";
+  emailVerified: boolean;
+  status: UserStatus;
+  statusBeforeDeactivation?: UserStatus;
+  statusBeforeArchive?: UserStatus;
+  archivedAt?: Date;
   favorites: mongoose.Types.ObjectId[];
   history: { listing: mongoose.Types.ObjectId; viewedAt: Date }[];
   verification?: IVerification;
@@ -27,6 +37,10 @@ const verificationSchema = new Schema<IVerification>(
   {
     idDocumentUrl: { type: String },
     authorityDocumentUrl: { type: String },
+    idDocumentKey: { type: String },
+    idDocumentMime: { type: String },
+    authorityDocumentKey: { type: String },
+    authorityDocumentMime: { type: String },
     submittedAt: { type: Date },
     reviewedAt: { type: Date },
     reviewNote: { type: String },
@@ -57,6 +71,11 @@ const userSchema = new Schema<IUser>(
       trim: true,
     },
 
+    phone: {
+      type: String,
+      trim: true,
+    },
+
     passwordHash: {
       type: String,
       required: true,
@@ -65,15 +84,32 @@ const userSchema = new Schema<IUser>(
 
     defaultRole: {
       type: String,
-      enum: ["tenant", "owner", "admin"],
+      enum: ["tenant", "owner", "admin", "superadmin"],
       required: true,
+    },
+
+    emailVerified: {
+      type: Boolean,
+      default: true,
     },
 
     status: {
       type: String,
-      enum: ["pending", "active", "suspended", "rejected"],
+      enum: ["pending", "active", "suspended", "rejected", "archived"],
       default: "active",
     },
+
+    statusBeforeDeactivation: {
+      type: String,
+      enum: ["pending", "active", "suspended", "rejected", "archived"],
+    },
+
+    statusBeforeArchive: {
+      type: String,
+      enum: ["pending", "active", "suspended", "rejected", "archived"],
+    },
+
+    archivedAt: { type: Date },
 
     favorites: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Listing" }],

@@ -13,6 +13,7 @@ interface ApiListing {
   price: number;
   transparency: number;
   verified: boolean;
+  imageUrl?: string;
   lat: number;
   lng: number;
   updatedAt: string;
@@ -33,6 +34,8 @@ function Landing() {
   const GAP = 24; // must match .carousel-track gap in Landing.css
 
   const [listings, setListings] = useState<ApiListing[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [carouselLoading, setCarouselLoading] = useState(true);
   const [listingsError, setListingsError] = useState("");
 
@@ -45,16 +48,17 @@ function Landing() {
 
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  const activeListingsCount = listings.length;
-  const barangaysMappedCount = new Set(listings.map((listing) => listing.barangay)).size;
+  const shownListings = listings;
+  const activeListingsCount = shownListings.length;
+  const barangaysMappedCount = new Set(shownListings.map((listing) => listing.barangay)).size;
 
   // Clones: last 3 real cards glued to the front, first 3 glued to the end
   const extendedListings =
-    listings.length > 0
+    shownListings.length > 0
       ? [
-          ...listings.slice(-CARDS_PER_VIEW),
-          ...listings,
-          ...listings.slice(0, CARDS_PER_VIEW),
+          ...shownListings.slice(-CARDS_PER_VIEW),
+          ...shownListings,
+          ...shownListings.slice(0, CARDS_PER_VIEW),
         ]
       : [];
 
@@ -75,7 +79,9 @@ function Landing() {
 
     async function loadListings() {
       try {
-        const response = await api.get("/listings");
+        const params = new URLSearchParams({ limit: "50" });
+        if (searchQuery.trim()) params.set("q", searchQuery.trim());
+        const response = await api.get(`/listings?${params.toString()}`);
         if (!cancelled) {
           setListings(response.data.listings);
         }
@@ -94,7 +100,7 @@ function Landing() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [searchQuery]);
 
   // Measure exact pixel width per card (accounts for the gap correctly)
   useEffect(() => {
@@ -186,11 +192,11 @@ function Landing() {
           <p className="hero-description">
             One local place to explore verified long-term rentals in Calapan
             City — complete with transparent listing details, approximate
-            locations, and immersive 360° views.
+            locations, and photos.
           </p>
 
-          <form className="hero-search" onSubmit={(e) => e.preventDefault()}>
-            <input type="text" placeholder="Search barangay, landmark, or type" />
+          <form className="hero-search" onSubmit={(event) => { event.preventDefault(); setSearchQuery(searchText); setIndex(CARDS_PER_VIEW); }}>
+            <input type="text" placeholder="Search title, barangay, or type" value={searchText} onChange={(event) => setSearchText(event.target.value)} />
             <button type="submit">
               Explore rentals <span className="button-arrow">↗</span>
             </button>
@@ -199,7 +205,7 @@ function Landing() {
           <div className="hero-stats">
             <div><strong>{activeListingsCount}</strong> Active listings</div>
             <div><strong>{barangaysMappedCount}</strong> Barangays mapped</div>
-            <div><strong>360°</strong> Tours available</div>
+            <div><strong>{shownListings.filter((listing) => listing.imageUrl).length}</strong> Photos</div>
           </div>
         </div>
 
@@ -253,7 +259,7 @@ function Landing() {
                 </div>
               ))}
             </div>
-          ) : listings.length === 0 ? (
+          ) : shownListings.length === 0 ? (
             <div className="carousel-empty">
               <p>{listingsError || "No listings yet — check back soon."}</p>
             </div>
@@ -273,8 +279,12 @@ function Landing() {
                   style={{ width: cardStep - GAP }}
                   onClick={handleListingClick}
                 >
-                  <div className="listing-thumb">
-                    <span className="tour-badge">360° Tour</span>
+                  <div
+                    className="listing-thumb"
+                    style={listing.imageUrl ? { backgroundImage: `url(${listing.imageUrl})`, backgroundSize: "cover" } : undefined}
+                  >
+                    <span className="tour-badge">Photos</span>
+                    {listing.verified && <span className="verified-pill">Verified owner</span>}
                   </div>
                   <div className="listing-info">
                     <div className="listing-meta">
@@ -295,7 +305,7 @@ function Landing() {
 
         {listings.length > 0 && (
           <div className="carousel-dots">
-            {listings.map((listing, i) => (
+            {shownListings.map((listing, i) => (
               <button
                 key={listing._id}
                 className={i === realIndex ? "dot active" : "dot"}

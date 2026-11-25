@@ -21,9 +21,19 @@ function ProtectedRoute({
   }
 
   const user = JSON.parse(storedUser);
+  const home = user.role === "admin" || user.role === "superadmin"
+    ? "/admin"
+    : user.role === "owner"
+      ? "/owner"
+      : user.role === "tenant"
+        ? "/tenant"
+        : "/login";
+  const allowed = allowedRole === "admin"
+    ? user.role === "admin" || user.role === "superadmin"
+    : user.role === allowedRole;
 
-  if (user.role !== allowedRole) {
-    return <Navigate to={`/${user.role}`} replace />;
+  if (!allowed) {
+    return <Navigate to={home} replace />;
   }
 
   return children;

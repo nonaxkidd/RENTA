@@ -4,8 +4,8 @@ import api from "../services/api";
 import "./OwnerVerificationPanel.css";
 
 interface VerificationInfo {
-  idDocumentUrl?: string;
-  authorityDocumentUrl?: string;
+  hasIdDocument?: boolean;
+  hasAuthorityDocument?: boolean;
   submittedAt?: string;
   reviewedAt?: string;
   reviewNote?: string;
@@ -51,8 +51,8 @@ function formatDate(iso?: string) {
 function OwnerVerificationPanel({ onStatusChange }: OwnerVerificationPanelProps) {
   const [data, setData] = useState<VerificationResponse | null>(null);
   const [error, setError] = useState("");
-  const [idUrl, setIdUrl] = useState("");
-  const [authorityUrl, setAuthorityUrl] = useState("");
+  const [idFile, setIdFile] = useState<File | null>(null);
+  const [authorityFile, setAuthorityFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formMessage, setFormMessage] = useState("");
   const [replacing, setReplacing] = useState(false);
@@ -78,14 +78,17 @@ function OwnerVerificationPanel({ onStatusChange }: OwnerVerificationPanelProps)
     setFormMessage("");
 
     try {
+      if (!idFile || !authorityFile) {
+        setFormMessage("Choose both files.");
+        return;
+      }
       setSubmitting(true);
-      await api.post(
-        "/verification",
-        { idDocumentUrl: idUrl.trim(), authorityDocumentUrl: authorityUrl.trim() },
-        getAuthHeaders()
-      );
-      setIdUrl("");
-      setAuthorityUrl("");
+      const body = new FormData();
+      body.append("idDocument", idFile);
+      body.append("authorityDocument", authorityFile);
+      await api.post("/verification", body, getAuthHeaders());
+      setIdFile(null);
+      setAuthorityFile(null);
       setReplacing(false);
       await load();
     } catch (err: any) {
@@ -112,7 +115,12 @@ function OwnerVerificationPanel({ onStatusChange }: OwnerVerificationPanelProps)
   }
 
   const v = data.verification;
-  const submitted = Boolean(v?.idDocumentUrl && v?.authorityDocumentUrl);
+  const submitted = Boolean(v?.hasIdDocument && v?.hasAuthorityDocument);
+
+  async function openMine(kind: "id" | "authority") {
+    const response = await api.get(`/verification/files/me/${kind}`, { ...getAuthHeaders(), responseType: "blob" });
+    window.open(URL.createObjectURL(response.data), "_blank", "noopener,noreferrer");
+  }
   const awaitingReview = data.status === "pending" && submitted && !v?.revisionRequested;
   const canSubmit = data.status === "pending" || data.status === "rejected";
   const showForm = canSubmit && (!submitted || v?.revisionRequested || data.status === "rejected" || replacing);
@@ -160,6 +168,13 @@ function OwnerVerificationPanel({ onStatusChange }: OwnerVerificationPanelProps)
         </div>
       )}
 
+      {submitted && (
+        <p>
+          <button type="button" className="ovp-link-btn" onClick={() => openMine("id")}>View my ID</button>
+          <button type="button" className="ovp-link-btn" onClick={() => openMine("authority")}>View my proof</button>
+        </p>
+      )}
+
       {awaitingReview && !replacing && (
         <button className="ovp-link-btn" onClick={() => setReplacing(true)}>
           Replace my submitted documents
@@ -169,29 +184,14 @@ function OwnerVerificationPanel({ onStatusChange }: OwnerVerificationPanelProps)
       {showForm && (
         <form className="ovp-form" onSubmit={handleSubmit}>
           <p className="ovp-warning">
-            For this prototype, paste links to <strong>sample</strong> documents. Don't link real
-            government IDs until RENTA has protected, reviewer-only file storage.
+            Upload a government ID and proof of authority. JPEG, PNG, WEBP, or PDF, up to 5 MB. The files are encrypted before they are saved.
           </p>
 
-          <label htmlFor="ovp-id">Government-issued ID (link)</label>
-          <input
-            id="ovp-id"
-            type="url"
-            value={idUrl}
-            onChange={(e) => setIdUrl(e.target.value)}
-            placeholder="https://example.com/sample-id.jpg"
-            required
-          />
+          <label htmlFor="ovp-id">Government-issued ID</label>
+          <input id="ovp-id" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setIdFile(e.target.files?.[0] ?? null)} required />
 
-          <label htmlFor="ovp-authority">Proof of ownership or authority to manage (link)</label>
-          <input
-            id="ovp-authority"
-            type="url"
-            value={authorityUrl}
-            onChange={(e) => setAuthorityUrl(e.target.value)}
-            placeholder="https://example.com/sample-proof.pdf"
-            required
-          />
+          <label htmlFor="ovp-authority">Proof of ownership or authority to manage</label>
+          <input id="ovp-authority" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setAuthorityFile(e.target.files?.[0] ?? null)} required />
 
           {formMessage && <p className="ovp-error">{formMessage}</p>}
 

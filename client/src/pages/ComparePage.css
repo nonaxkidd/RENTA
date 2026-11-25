@@ -171,7 +171,12 @@
 }
 
 .cmpg-photo.placeholder {
-  background: linear-gradient(135deg, #2a3f2f, #1a2a22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #d7e0d8, #eef2ea);
+  color: #3d5244;
+  font-weight: 700;
 }
 
 .cmpg-listing-body {

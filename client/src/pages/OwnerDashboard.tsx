@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 import OwnerVerificationPanel from "../components/OwnerVerificationPanel";
+import BarangayPinMap from "../components/BarangayPinMap";
+import { NotificationList, useNotificationFeed } from "../components/NotificationList";
 import "./OwnerDashboard.css";
 
 interface RentaUser {
@@ -23,12 +25,15 @@ interface OwnerListing {
   available: boolean;
   description: string;
   imageUrl?: string;
+  reviewNote?: string;
+  lat?: number;
+  lng?: number;
+  amenities?: string[];
+  houseRules?: string[];
 }
 
-type ActiveView = "listings" | "reservations" | "viewings" | "notifications" | "account";
+type ActiveView = "listings" | "reservations" | "notifications" | "account";
 type ListingFilter = "all" | "verified" | "pending" | "available" | "occupied";
-type IconComponent = () => React.ReactElement;
-
 const TYPE_OPTIONS = ["Private room", "Studio unit", "1BR unit", "2BR unit", "Bedspace"];
 
 const FILTER_LABELS: Record<ListingFilter, string> = {
@@ -65,14 +70,6 @@ function IconCalendar() {
       <line x1="3" y1="10" x2="21" y2="10" />
       <line x1="8" y1="3" x2="8" y2="7" />
       <line x1="16" y1="3" x2="16" y2="7" />
-    </svg>
-  );
-}
-function IconEye() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -154,16 +151,33 @@ function OwnerDashboard() {
   const [title, setTitle] = useState("");
   const [type, setType] = useState(TYPE_OPTIONS[0]);
   const [barangay, setBarangay] = useState("");
+  const [barangays, setBarangays] = useState<string[]>([]);
+  const [pinLat, setPinLat] = useState<number | null>(null);
+  const [pinLng, setPinLng] = useState<number | null>(null);
+  const [pinHint, setPinHint] = useState("Choose a barangay, then click inside Calapan to place the pin.");
   const [price, setPrice] = useState("");
   const [capacity, setCapacity] = useState("");
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
   const [description, setDescription] = useState("");
   const [amenitiesText, setAmenitiesText] = useState("");
   const [houseRulesText, setHouseRulesText] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const notifications = useNotificationFeed();
   const [submitting, setSubmitting] = useState(false);
   const [formMessage, setFormMessage] = useState("");
+  const [reservations, setReservations] = useState<Array<{
+    _id: string;
+    queueStatus: string;
+    occupants: number;
+    intendedMoveIn: string;
+    notes?: string;
+    queuePosition?: number | null;
+    tenantId?: { firstName?: string; lastName?: string; email?: string };
+    unitId?: { title?: string };
+  }>>([]);
+  const [reservationNotes, setReservationNotes] = useState<Record<string, string>>({});
+  const [reservationMessage, setReservationMessage] = useState("");
 
   function getAuthHeaders() {
     const token = localStorage.getItem("renta_token");
@@ -184,7 +198,21 @@ function OwnerDashboard() {
 
   useEffect(() => {
     loadMyListings();
+    api.get("/listings/barangays")
+      .then((response) => setBarangays(response.data.barangays ?? []))
+      .catch(() => setFormMessage("Couldn't load the Calapan barangay list."));
   }, []);
+
+  useEffect(() => {
+    function loadReservations() {
+      api.get("/reservations/owner", getAuthHeaders())
+        .then((response) => setReservations(response.data.reservations ?? []))
+        .catch((err) => setReservationMessage(err.response?.data?.message || "Couldn't load reservations."));
+    }
+    if (activeView === "reservations") loadReservations();
+    const timer = window.setInterval(loadReservations, 30000);
+    return () => window.clearInterval(timer);
+  }, [activeView]);
 
   function handleLogout() {
     localStorage.removeItem("renta_token");
@@ -201,19 +229,71 @@ function OwnerDashboard() {
     setActiveView(view);
   }
 
+  async function handleBarangayChange(name: string) {
+    setBarangay(name);
+    setPinLat(null);
+    setPinLng(null);
+    if (!name) {
+      setPinHint("Choose a barangay, then click inside Calapan to place the pin.");
+      return;
+    }
+
+    setPinHint("Finding that barangay on the map...");
+    try {
+      const response = await api.get("/listings/barangay-center", { params: { name } });
+      setPinLat(response.data.lat);
+      setPinLng(response.data.lng);
+      setPinHint("The pin starts at the barangay. Click inside the city outline to move it to the exact house.");
+    } catch {
+      setPinHint("Click inside the city outline. The barangay center could not be loaded.");
+    }
+  }
+
   function resetForm() {
     setTitle("");
     setType(TYPE_OPTIONS[0]);
     setBarangay("");
+    setPinLat(null);
+    setPinLng(null);
+    setPinHint("Choose a barangay, then click inside Calapan to place the pin.");
     setPrice("");
     setCapacity("");
-    setLat("");
-    setLng("");
     setDescription("");
     setAmenitiesText("");
     setHouseRulesText("");
     setImageUrl("");
+    setPhotoFile(null);
+    setEditingId(null);
     setFormMessage("");
+  }
+
+  function openEditor(listing: OwnerListing) {
+    setEditingId(listing._id);
+    setTitle(listing.title);
+    setType(listing.type);
+    setBarangay(listing.barangay);
+    setPinLat(listing.lat ?? null);
+    setPinLng(listing.lng ?? null);
+    setPinHint("Move the pin if the location should change.");
+    setPrice(String(listing.price));
+    setCapacity(String(listing.capacity));
+    setDescription(listing.description);
+    setAmenitiesText((listing.amenities ?? []).join(", "));
+    setHouseRulesText((listing.houseRules ?? []).join(", "));
+    setImageUrl(listing.imageUrl ?? "");
+    setPhotoFile(null);
+    setFormMessage("");
+    setShowForm(true);
+  }
+
+  async function removeListing(id: string) {
+    if (!window.confirm("Remove this listing? A paid reservation keeps it listed.")) return;
+    try {
+      await api.delete(`/listings/${id}`, getAuthHeaders());
+      loadMyListings();
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Couldn't remove that listing.");
+    }
   }
 
   async function handleCreateListing(event: React.FormEvent) {
@@ -225,27 +305,43 @@ function OwnerDashboard() {
       return;
     }
 
+    if (!barangay || pinLat == null || pinLng == null) {
+      setFormMessage("Choose a barangay and click the map to place the pin.");
+      return;
+    }
+
     try {
       setSubmitting(true);
+      let photo = imageUrl.trim();
+      if (photoFile) {
+        const body = new FormData();
+        body.append("photo", photoFile);
+        const uploaded = await api.post("/listings/photo", body, getAuthHeaders());
+        photo = uploaded.data.imageUrl;
+      }
+      if (!photo) {
+        setFormMessage("Upload a photo or paste a photo link.");
+        return;
+      }
 
-      await api.post(
-        "/listings",
-        {
+      const payload = {
           title,
           type,
           barangay,
+          lat: pinLat,
+          lng: pinLng,
           price: Number(price),
           capacity: Number(capacity),
-          lat: Number(lat),
-          lng: Number(lng),
           description,
           amenities: amenitiesText.split(",").map((a) => a.trim()).filter(Boolean),
           houseRules: houseRulesText.split(",").map((r) => r.trim()).filter(Boolean),
           ownerName: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
-          imageUrl: imageUrl.trim() || undefined,
-        },
-        getAuthHeaders()
-      );
+          imageUrl: photo,
+      };
+      const response = editingId
+        ? await api.put(`/listings/${editingId}`, payload, getAuthHeaders())
+        : await api.post("/listings", payload, getAuthHeaders());
+      setFormMessage(response.data.message || "");
 
       resetForm();
       setShowForm(false);
@@ -279,7 +375,7 @@ function OwnerDashboard() {
                 : FILTER_LABELS[listingFilter]}
             </h1>
           </div>
-          <button className="odash-new-btn" onClick={() => setShowForm((v) => !v)}>
+          <button className="odash-new-btn" onClick={() => { if (showForm) { setShowForm(false); resetForm(); } else { resetForm(); setShowForm(true); } }}>
             {showForm ? "Cancel" : "+ New listing"}
           </button>
         </div>
@@ -294,7 +390,7 @@ function OwnerDashboard() {
 
         {showForm && (
           <form className="odash-form" onSubmit={handleCreateListing}>
-            <h2>Create a new listing</h2>
+            <h2>{editingId ? "Edit listing" : "Create a new listing"}</h2>
 
             <div className="odash-form-row">
               <div className="odash-form-group">
@@ -311,13 +407,13 @@ function OwnerDashboard() {
 
             <div className="odash-form-row">
               <div className="odash-form-group">
-                <label>Barangay</label>
-                <input
-                  value={barangay}
-                  onChange={(e) => setBarangay(e.target.value)}
-                  placeholder="Brgy. Bayanan"
-                  required
-                />
+                <label>Barangay in Calapan</label>
+                <select value={barangay} onChange={(e) => handleBarangayChange(e.target.value)} required>
+                  <option value="">Select a barangay</option>
+                  {barangays.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
               </div>
               <div className="odash-form-group">
                 <label>Monthly price (₱)</label>
@@ -329,20 +425,21 @@ function OwnerDashboard() {
               </div>
             </div>
 
-            <div className="odash-form-row">
-              <div className="odash-form-group">
-                <label>Approximate latitude</label>
-                <input type="number" step="0.0001" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="13.41" required />
-              </div>
-              <div className="odash-form-group">
-                <label>Approximate longitude</label>
-                <input type="number" step="0.0001" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="121.18" required />
-              </div>
+            <div className="odash-map">
+              <BarangayPinMap
+                lat={pinLat}
+                lng={pinLng}
+                onPick={(lat, lng) => {
+                  setPinLat(lat);
+                  setPinLng(lng);
+                  setPinHint("Pin placed inside Calapan. Click again if you need to move it.");
+                }}
+                onOutside={() => {
+                  setPinHint("That spot is outside Calapan City. Keep the pin inside the city.");
+                }}
+              />
             </div>
-            <p className="odash-hint">
-              Use an approximate point near your property, not the exact address — RENTA only
-              shows approximate locations publicly, per platform policy.
-            </p>
+            <p className="odash-hint">{pinHint}</p>
 
             <div className="odash-form-group">
               <label>Description</label>
@@ -361,23 +458,20 @@ function OwnerDashboard() {
             </div>
 
             <div className="odash-form-group">
-              <label>Photo URL (optional)</label>
+              <label>Photo</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)} />
               <input
                 type="url"
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://example.com/your-property-photo.jpg"
+                placeholder="or paste a photo link"
               />
-            </div>
-
-            <div className="odash-media-placeholder">
-              Direct file uploads and 360° tour uploads are coming in a future update — for now, paste a link to a hosted photo above.
             </div>
 
             {formMessage && <p className="odash-form-message">{formMessage}</p>}
 
             <button type="submit" className="odash-submit-btn" disabled={submitting}>
-              {submitting ? "Creating..." : "Create listing"}
+              {submitting ? "Saving..." : editingId ? "Save listing" : "Create listing"}
             </button>
           </form>
         )}
@@ -408,8 +502,8 @@ function OwnerDashboard() {
                     className="odash-listing-thumb"
                     style={listing.imageUrl ? { backgroundImage: `url(${listing.imageUrl})` } : undefined}
                   >
-                    <span className={listing.verified ? "odash-badge verified" : "odash-badge pending"}>
-                      {listing.verified ? "Verified" : "Pending review"}
+                    <span className={listing.verified ? "odash-badge verified" : listing.reviewNote ? "odash-badge rejected" : "odash-badge pending"}>
+                      {listing.verified ? "Verified" : listing.reviewNote ? "Disapproved" : "Pending review"}
                     </span>
                   </div>
                   <div className="odash-listing-info">
@@ -419,8 +513,13 @@ function OwnerDashboard() {
                     </div>
                     <h3>{listing.title}</h3>
                     <span className="odash-listing-status">
-                      {listing.available ? "Available" : "Occupied"}
+                      {listing.available ? "Available" : "Reserved"}
                     </span>
+                    {listing.reviewNote && !listing.verified && (
+                      <p className="odash-hint">Disapproval comment: {listing.reviewNote}</p>
+                    )}
+                    <button type="button" className="odash-new-btn" onClick={() => openEditor(listing)}>Edit</button>
+                    <button type="button" className="odash-new-btn" onClick={() => removeListing(listing._id)}>Remove</button>
                   </div>
                 </div>
               ))}
@@ -431,28 +530,76 @@ function OwnerDashboard() {
     );
   }
 
-  function renderComingSoon(
-    eyebrow: string,
-    heading: string,
-    subtext: string,
-    Icon: IconComponent,
-    emptyTitle: string,
-    emptyText: string
-  ) {
+  async function decideReservation(id: string, decision: "approve" | "reject") {
+    setReservationMessage("");
+    try {
+      const response = await api.patch(
+        `/reservations/${id}/decision`,
+        { decision, responseNote: reservationNotes[id] || "" },
+        getAuthHeaders()
+      );
+      setReservationMessage(response.data.message);
+      const refreshed = await api.get("/reservations/owner", getAuthHeaders());
+      setReservations(refreshed.data.reservations ?? []);
+    } catch (err: any) {
+      setReservationMessage(err.response?.data?.message || "Couldn't save that decision.");
+    }
+  }
+
+  function renderReservationsView() {
     return (
       <>
         <div className="odash-header">
           <div>
-            <p className="odash-eyebrow">{eyebrow}</p>
-            <h1>{heading}</h1>
-            <p className="odash-subtext">{subtext}</p>
+            <p className="odash-eyebrow">MANAGE</p>
+            <h1>Reservations</h1>
+            <p className="odash-subtext">
+              Approving a request starts the down payment. The listing stays available until that payment is confirmed.
+            </p>
           </div>
         </div>
-        <div className="odash-empty">
-          <div className="odash-empty-icon"><Icon /></div>
-          <p className="odash-empty-title">{emptyTitle}</p>
-          <p className="odash-empty-text">{emptyText}</p>
-        </div>
+        {reservationMessage && <p className="odash-form-message">{reservationMessage}</p>}
+        {reservations.length === 0 ? (
+          <div className="odash-empty">
+            <p className="odash-empty-title">No reservation requests yet</p>
+          </div>
+        ) : (
+          reservations.map((reservation) => (
+            <div className="odash-listing-card" key={reservation._id} style={{ marginBottom: 12 }}>
+              <div className="odash-listing-info">
+                <h3>{reservation.unitId?.title || "Listing"}</h3>
+                <p>
+                  {reservation.tenantId?.firstName} {reservation.tenantId?.lastName} · {reservation.tenantId?.email}
+                </p>
+                <p>
+                  Move-in {new Date(reservation.intendedMoveIn).toLocaleDateString()} · {reservation.occupants} occupant(s) · {reservation.queueStatus}
+                  {reservation.queuePosition ? ` · queue #${reservation.queuePosition}` : ""}
+                </p>
+                {reservation.notes && <p className="odash-hint">{reservation.notes}</p>}
+                {reservation.queueStatus === "queued" && (
+                  <>
+                    <textarea
+                      rows={2}
+                      placeholder="Comment (required if you disapprove)"
+                      value={reservationNotes[reservation._id] || ""}
+                      onChange={(event) =>
+                        setReservationNotes((current) => ({ ...current, [reservation._id]: event.target.value }))
+                      }
+                    />
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button type="button" className="odash-new-btn" onClick={() => decideReservation(reservation._id, "approve")}>
+                        Approve
+                      </button>
+                      <button type="button" className="odash-new-btn" onClick={() => decideReservation(reservation._id, "reject")}>
+                        Disapprove
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </>
     );
   }
@@ -553,13 +700,6 @@ function OwnerDashboard() {
               <IconCalendar />
               {sidebarExpanded && <span>Reservations</span>}
             </button>
-            <button
-              className={sidebarItemClass(activeView === "viewings")}
-              onClick={() => goToView("viewings")}
-            >
-              <IconEye />
-              {sidebarExpanded && <span>Viewing requests</span>}
-            </button>
           </div>
 
           <div className="odash-sidebar-divider" />
@@ -605,7 +745,7 @@ function OwnerDashboard() {
               onClick={() => goToView("notifications")}
             >
               <IconBell />
-              {sidebarExpanded && <span>Notifications</span>}
+              {sidebarExpanded && <span>Notifications{notifications.unread > 0 ? ` (${notifications.unread})` : ""}</span>}
             </button>
             <button
               className={sidebarItemClass(activeView === "account")}
@@ -628,35 +768,19 @@ function OwnerDashboard() {
           <div className="odash-content">
             {activeView === "listings" && renderListingsView()}
 
-            {activeView === "reservations" &&
-              renderComingSoon(
-                "MANAGE",
-                "Reservations",
-                "Review and respond to tenant reservation requests.",
-                IconCalendar,
-                "No reservation requests yet",
-                "Reservation requests from tenants will appear here once reservations are enabled."
-              )}
+            {activeView === "reservations" && renderReservationsView()}
 
-            {activeView === "viewings" &&
-              renderComingSoon(
-                "MANAGE",
-                "Viewing requests",
-                "Approve, reject, or reschedule in-person viewings.",
-                IconEye,
-                "No viewing requests yet",
-                "Viewing requests from tenants will appear here once that feature is enabled."
-              )}
-
-            {activeView === "notifications" &&
-              renderComingSoon(
-                "YOU",
-                "Notifications",
-                "Updates about your listings and account.",
-                IconBell,
-                "No notifications yet",
-                "You'll see updates here once RENTA's notification system is live."
-              )}
+            {activeView === "notifications" && (
+              <>
+                <div className="odash-header">
+                  <div>
+                    <p className="odash-eyebrow">YOU</p>
+                    <h1>Notifications</h1>
+                  </div>
+                </div>
+                <NotificationList items={notifications.items} onRead={notifications.markRead} />
+              </>
+            )}
 
             {activeView === "account" && renderAccountView()}
           </div>

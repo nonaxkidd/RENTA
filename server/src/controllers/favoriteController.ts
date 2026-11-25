@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { User } from "../models/User";
 import { Listing } from "../models/Listing";
+import { requireObjectId } from "../utils/params";
 
 export async function getFavorites(req: Request, res: Response) {
   try {
@@ -19,7 +20,8 @@ export async function getFavorites(req: Request, res: Response) {
 
 export async function addFavorite(req: Request, res: Response) {
   try {
-    const { listingId } = req.params;
+    const listingId = requireObjectId(req, res, "listingId");
+    if (!listingId) return;
 
     const listing = await Listing.findById(listingId);
     if (!listing) {
@@ -46,7 +48,8 @@ export async function addFavorite(req: Request, res: Response) {
 
 export async function removeFavorite(req: Request, res: Response) {
   try {
-    const { listingId } = req.params;
+    const listingId = requireObjectId(req, res, "listingId");
+    if (!listingId) return;
 
     const user = await User.findById(req.auth?.userId);
     if (!user) {

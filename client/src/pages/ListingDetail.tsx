@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import type { FormEvent } from "react";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../services/api";
-import PanoramaViewer from "../components/PanoramaViewer";
 import "./ListingDetail.css";
 
 interface ListingData {
@@ -47,6 +47,7 @@ function getAuthHeaders() {
 function ListingDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const storedUser = localStorage.getItem("renta_user");
   const user: RentaUser = storedUser ? JSON.parse(storedUser) : {};
@@ -57,7 +58,7 @@ function ListingDetail() {
       navigate("/tenant");
     } else if (user.role === "owner") {
       navigate("/owner");
-    } else if (user.role === "admin") {
+    } else if (user.role === "admin" || user.role === "superadmin") {
       navigate("/admin");
     } else {
       navigate("/");
@@ -70,7 +71,16 @@ function ListingDetail() {
 
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
-  const [showTour, setShowTour] = useState(false);
+  const [reviews, setReviews] = useState<{ tenantName: string; rating: number; comment: string }[]>([]);
+  const [average, setAverage] = useState(0);
+  const [rating, setRating] = useState("5");
+  const [comment, setComment] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
+  const [moveIn, setMoveIn] = useState("");
+  const [occupants, setOccupants] = useState("1");
+  const [reserveNotes, setReserveNotes] = useState("");
+  const [reserveMessage, setReserveMessage] = useState("");
+  const [myReservation, setMyReservation] = useState<{ _id: string; queueStatus: string; ownerResponse?: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +132,85 @@ function ListingDetail() {
     api.post(`/history/${id}`, {}, getAuthHeaders()).catch(() => {});
   }, [id, isTenant]);
 
+  useEffect(() => {
+    if (!id) return;
+    api.get(`/reviews/listing/${id}`)
+      .then((response) => {
+        setReviews(response.data.reviews ?? []);
+        setAverage(response.data.average ?? 0);
+      })
+      .catch(() => {});
+  }, [id]);
+
+  useEffect(() => {
+    if (!isTenant || !id) return;
+    api.get("/reservations/mine", getAuthHeaders())
+      .then((response) => {
+        const match = (response.data.reservations ?? []).find((item: { unitId?: { _id?: string } | string }) => {
+          const unit = item.unitId;
+          const unitId = typeof unit === "string" ? unit : unit?._id;
+          return unitId === id;
+        });
+        setMyReservation(match ?? null);
+      })
+      .catch(() => {});
+  }, [id, isTenant]);
+
+  useEffect(() => {
+    const reservationId = searchParams.get("reservation");
+    if (!isTenant || !reservationId) return;
+    api.post("/payments/sync", { reservationId }, getAuthHeaders())
+      .then((response) => {
+        if (response.data.status === "paid") {
+          setReserveMessage("Down payment received. This listing is now reserved and no longer available.");
+          setListing((current) => (current ? { ...current, available: false } : current));
+        }
+      })
+      .catch((err) => setReserveMessage(err.response?.data?.message || "Payment is not confirmed yet."));
+  }, [searchParams, isTenant]);
+
+  async function submitReservation(event: FormEvent) {
+    event.preventDefault();
+    setReserveMessage("");
+    try {
+      const response = await api.post(`/reservations/listings/${id}`, {
+        intendedMoveIn: moveIn,
+        occupants: Number(occupants),
+        notes: reserveNotes,
+      }, getAuthHeaders());
+      setMyReservation(response.data.reservation);
+      setReserveMessage("Request sent. The listing stays available until the owner approves it and you pay the one-month down payment.");
+    } catch (err: any) {
+      setReserveMessage(err.response?.data?.message || "Couldn't send the reservation.");
+    }
+  }
+
+  async function payDownPayment() {
+    if (!myReservation) return;
+    setReserveMessage("");
+    try {
+      const response = await api.post("/payments/checkout", { reservationId: myReservation._id }, getAuthHeaders());
+      window.location.href = response.data.checkoutUrl;
+    } catch (err: any) {
+      setReserveMessage(err.response?.data?.message || "Couldn't start payment.");
+    }
+  }
+
+  async function submitReview(event: FormEvent) {
+    event.preventDefault();
+    setReviewMessage("");
+    try {
+      await api.post(`/reviews/listing/${id}`, { rating: Number(rating), comment }, getAuthHeaders());
+      setComment("");
+      setReviewMessage("Thanks. Your rating was saved.");
+      const response = await api.get(`/reviews/listing/${id}`);
+      setReviews(response.data.reviews ?? []);
+      setAverage(response.data.average ?? 0);
+    } catch (err: any) {
+      setReviewMessage(err.response?.data?.message || "Couldn't save your rating.");
+    }
+  }
+
   async function toggleFavorite() {
     if (!isTenant || !id || favoriteBusy) return;
 
@@ -165,22 +254,20 @@ function ListingDetail() {
   return (
     <div className="detail-page">
       <nav className="detail-nav">
+        <button onClick={goBack} className="detail-back-link detail-back-button">
+          ← Back
+        </button>
         <Link to="/" className="detail-logo">
           <span className="logo-circle">R.</span>
           <span className="logo-name">RENTA</span>
         </Link>
-        <button onClick={goBack} className="detail-back-link detail-back-button">
-          ← Back to listings
-        </button>
       </nav>
 
       <div
         className="detail-hero"
         style={listing.imageUrl ? { backgroundImage: `url(${listing.imageUrl})` } : undefined}>
         {listing.verified && <span className="detail-verified-badge">Verified owner</span>}
-                <button className="detail-tour-badge detail-tour-trigger" onClick={() => setShowTour(true)}>
-          360° Tour
-        </button>
+        <span className="detail-tour-badge">Photos</span>
 
         {isTenant && (
           <button
@@ -261,28 +348,86 @@ function ListingDetail() {
                 {listing.ownerName.charAt(0).toUpperCase()}
               </div>
               <div>
-                <p className="detail-owner-name">{listing.ownerName}</p>
+                <p className="detail-owner-name">
+                  {listing.ownerName}
+                  {listing.verified && <span className="detail-verified-badge detail-owner-badge">Verified owner</span>}
+                </p>
                 <p className="detail-owner-sub">
                   {listing.verified ? "Identity verified by RENTA" : "Verification pending"}
                 </p>
               </div>
             </div>
           </section>
+
+          {isTenant && (
+            <section className="detail-section">
+              <h2>Reserve</h2>
+              <p>
+                Down payment is one month of rent (₱{listing.price.toLocaleString()}). The listing stays on Available until that payment is confirmed.
+              </p>
+              {myReservation ? (
+                <div>
+                  <p>Status: {myReservation.queueStatus.replaceAll("_", " ")}</p>
+                  {myReservation.ownerResponse && <p>Owner comment: {myReservation.ownerResponse}</p>}
+                  {myReservation.queueStatus === "payment_pending" && (
+                    <button type="button" className="detail-submit" onClick={payDownPayment}>
+                      Pay down payment
+                    </button>
+                  )}
+                </div>
+              ) : listing.available ? (
+                <form className="detail-form" onSubmit={submitReservation}>
+                  <label>
+                    Move-in date
+                    <input type="date" value={moveIn} onChange={(event) => setMoveIn(event.target.value)} required />
+                  </label>
+                  <label>
+                    Occupants
+                    <input type="number" min="1" max={listing.capacity} value={occupants} onChange={(event) => setOccupants(event.target.value)} required />
+                  </label>
+                  <label>
+                    Notes
+                    <textarea value={reserveNotes} onChange={(event) => setReserveNotes(event.target.value)} rows={3} />
+                  </label>
+                  <button type="submit" className="detail-submit">Request reservation</button>
+                </form>
+              ) : (
+                <p>This listing is already reserved.</p>
+              )}
+              {reserveMessage && <p>{reserveMessage}</p>}
+            </section>
+          )}
+
+          <section className="detail-section">
+            <h2>Owner ratings {average > 0 ? `· ${average} / 5` : ""}</h2>
+            {reviews.length === 0 && <p>No ratings yet.</p>}
+            {reviews.map((review) => (
+              <div className="detail-review" key={`${review.tenantName}-${review.comment}`}>
+                <p className="detail-stars">{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)} {review.tenantName}</p>
+                <p>{review.comment}</p>
+              </div>
+            ))}
+            {isTenant && (
+              <form className="detail-form" onSubmit={submitReview}>
+                <label>
+                  Rating
+                  <select value={rating} onChange={(event) => setRating(event.target.value)}>
+                    {[5, 4, 3, 2, 1].map((value) => (
+                      <option key={value} value={value}>{value}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Comment
+                  <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={3} required />
+                </label>
+                <button type="submit" className="detail-submit">Rate owner</button>
+              </form>
+            )}
+            {reviewMessage && <p>{reviewMessage}</p>}
+          </section>
         </div>
         <div className="detail-map-column">
-            {showTour && (
-          <div className="tour-modal-overlay" onClick={() => setShowTour(false)}>
-            <div className="tour-modal" onClick={(e) => e.stopPropagation()}>
-              <button className="tour-modal-close" onClick={() => setShowTour(false)} aria-label="Close">
-                ×
-              </button>
-              <PanoramaViewer imageUrl="https://pannellum.org/images/alma.jpg" />
-              <p className="tour-modal-note">
-                Demo panorama — real owner-uploaded 360° tours are coming in a future update.
-              </p>
-            </div>
-          </div>
-            )}
           <div className="detail-map-wrap">
             <MapContainer
               center={[listing.lat, listing.lng]}

@@ -6,9 +6,16 @@ import {
   getAdminListings,
   reviewListing,
   getUsers,
+  createUser,
+  updateUser,
+  setUserStatus,
+  resetUserPassword,
   getReports,
   getAuditLog,
+  getPayments,
+  markPaymentRefunded,
 } from "../controllers/adminController";
+import { readOwnerDocument } from "../controllers/verificationController";
 import { authenticate, requireRole } from "../middleware/authMiddleware";
 
 const router = Router();
@@ -22,7 +29,14 @@ router.patch("/owners/:id/review", reviewOwner);
 router.get("/listings", getAdminListings);
 router.patch("/listings/:id/review", reviewListing);
 router.get("/users", getUsers);
+router.post("/users", createUser);
+router.patch("/users/:id", updateUser);
+router.patch("/users/:id/status", setUserStatus);
+router.patch("/users/:id/password", resetUserPassword);
 router.get("/reports", getReports);
 router.get("/audit", getAuditLog);
+router.get("/payments", getPayments);
+router.patch("/payments/:id/refund", markPaymentRefunded);
+router.get("/owners/:id/documents/:kind", readOwnerDocument);
 
 export default router;

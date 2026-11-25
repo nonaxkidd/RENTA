@@ -277,6 +277,35 @@
   margin: -8px 0 16px;
 }
 
+.odash-map {
+  height: 280px;
+  margin-bottom: 10px;
+  border: 1px solid #d4dcda;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.odash-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+  font-family: inherit;
+}
+
+.renta-pin {
+  background: transparent;
+  border: none;
+}
+
+.renta-pin-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #061f29;
+  border: 3px solid #b5ee7c;
+  box-shadow: 0 2px 8px rgba(6, 31, 41, 0.35);
+}
+
 .odash-media-placeholder {
   background: #f3f2eb;
   border: 1px dashed #d4dcda;
@@ -356,6 +385,11 @@
 .odash-badge.verified {
   background: #d7f542;
   color: #061f29;
+}
+
+.odash-badge.rejected {
+  background: #f8d0d0;
+  color: #8a1f1f;
 }
 
 .odash-badge.pending {

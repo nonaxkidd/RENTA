@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import type { FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Tooltip } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../services/api";
 import { CompareBar, CompareToggle } from "../components/CompareWidgets";
+import { NotificationList, useNotificationFeed } from "../components/NotificationList";
 import type { CompareItem } from "../components/CompareWidgets";
 import "../components/CompareWidgets.css";
 import "./TenantDashboard.css";
@@ -13,6 +15,7 @@ interface RentaUser {
   firstName?: string;
   lastName?: string;
   email?: string;
+  phone?: string;
   role?: string;
 }
 
@@ -34,27 +37,6 @@ interface HistoryEntry {
   viewedAt: string;
 }
 
-interface SampleListing {
-  id: number;
-  title: string;
-  type: string;
-  barangay: string;
-  price: number;
-  capacity: number;
-  verified: boolean;
-  lat: number;
-  lng: number;
-}
-
-const sampleListings: SampleListing[] = [
-  { id: 1, title: "Bayanan Garden Rooms", type: "Private room", barangay: "Bayanan", price: 4800, capacity: 1, verified: true, lat: 13.4195, lng: 121.1845 },
-  { id: 2, title: "Luna Residences", type: "Studio unit", barangay: "Ilaya", price: 7200, capacity: 2, verified: true, lat: 13.4128, lng: 121.1812 },
-  { id: 3, title: "Calapan Heights Suite", type: "1BR unit", barangay: "Guinobatan", price: 9500, capacity: 3, verified: true, lat: 13.4295, lng: 121.1705 },
-  { id: 4, title: "Riverside Nest", type: "Private room", barangay: "Silonay", price: 5300, capacity: 1, verified: false, lat: 13.4402, lng: 121.1995 },
-  { id: 5, title: "Sto. Niño Flats", type: "Studio unit", barangay: "Santo Niño", price: 6750, capacity: 2, verified: true, lat: 13.4152, lng: 121.1788 },
-  { id: 6, title: "Masipit Boarding House", type: "Bedspace", barangay: "Masipit", price: 2500, capacity: 1, verified: false, lat: 13.4048, lng: 121.1655 },
-];
-
 const CALAPAN_CENTER: [number, number] = [13.4117, 121.1803];
 
 const TYPE_OPTIONS = ["All types", "Private room", "Studio unit", "1BR unit", "2BR unit", "Bedspace"];
@@ -69,7 +51,7 @@ const CAPACITY_OPTIONS = ["Any capacity", "1 person", "2 people", "3+ people"];
 const COMPARE_KEY = "renta_compare";
 const COMPARE_LIMIT = 2;
 
-type ActiveView = "discover" | "saved" | "history" | "notifications" | "account";
+type ActiveView = "discover" | "saved" | "history" | "reservations" | "notifications" | "account";
 
 /* ---------- LINE ICONS (hand-built, no external library) ---------- */
 
@@ -228,7 +210,14 @@ function TenantDashboard() {
   const navigate = useNavigate();
 
   const storedUser = localStorage.getItem("renta_user");
-  const user: RentaUser = storedUser ? JSON.parse(storedUser) : {};
+  const [user, setUser] = useState<RentaUser>(storedUser ? JSON.parse(storedUser) : {});
+  const [profileForm, setProfileForm] = useState({
+    firstName: (storedUser ? JSON.parse(storedUser).firstName : "") || "",
+    lastName: (storedUser ? JSON.parse(storedUser).lastName : "") || "",
+    phone: (storedUser ? JSON.parse(storedUser).phone : "") || "",
+  });
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "" });
+  const [accountMessage, setAccountMessage] = useState("");
   const initial = user.firstName ? user.firstName.charAt(0).toUpperCase() : "T";
 
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -260,26 +249,52 @@ function TenantDashboard() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const [compareItems, setCompareItems] = useState<CompareItem[]>(loadCompare);
+  const [myReservations, setMyReservations] = useState<Array<{
+    _id: string;
+    queueStatus: string;
+    downPaymentAmount?: number;
+    occupants?: number;
+    intendedMoveIn?: string;
+    unitId?: { _id?: string; title?: string; barangay?: string; price?: number };
+  }>>([]);
+  const [reservationMessage, setReservationMessage] = useState("");
+  const notifications = useNotificationFeed();
+
+  useEffect(() => {
+    function loadReservations() {
+      api.get("/reservations/mine", getAuthHeaders())
+        .then((response) => setMyReservations(response.data.reservations ?? []))
+        .catch((error) => setReservationMessage(error.response?.data?.message || "Couldn't load reservations."));
+    }
+    loadReservations();
+    const timer = window.setInterval(loadReservations, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-
-    async function loadListings() {
+    const handle = window.setTimeout(async () => {
       try {
-        const response = await api.get("/listings");
-        if (!cancelled) setRealListings(response.data.listings);
+        const params = new URLSearchParams({ limit: "50" });
+        const q = query.trim();
+        if (q) params.set("q", q);
+        const response = await api.get(`/listings?${params.toString()}`);
+        if (!cancelled) {
+          setRealListings(response.data.listings);
+          setRealListingsError("");
+        }
       } catch {
         if (!cancelled) setRealListingsError("Couldn't load listings right now.");
       } finally {
         if (!cancelled) setRealListingsLoading(false);
       }
-    }
+    }, 300);
 
-    loadListings();
     return () => {
       cancelled = true;
+      window.clearTimeout(handle);
     };
-  }, []);
+  }, [query]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -405,13 +420,7 @@ function TenantDashboard() {
   const activePriceRange = PRICE_OPTIONS.find((p) => p.label === priceFilter) ?? PRICE_OPTIONS[0];
 
   const filteredListings = useMemo(() => {
-    return sampleListings.filter((listing) => {
-      const matchesQuery =
-        query.trim() === "" ||
-        listing.title.toLowerCase().includes(query.toLowerCase()) ||
-        listing.barangay.toLowerCase().includes(query.toLowerCase()) ||
-        listing.type.toLowerCase().includes(query.toLowerCase());
-
+    return realListings.filter((listing) => {
       const matchesType = typeFilter === "All types" || listing.type === typeFilter;
       const matchesPrice = listing.price >= activePriceRange.min && listing.price <= activePriceRange.max;
       const matchesCapacity =
@@ -421,9 +430,9 @@ function TenantDashboard() {
         (capacityFilter === "3+ people" && listing.capacity >= 3);
       const matchesVerified = !verifiedOnly || listing.verified;
 
-      return matchesQuery && matchesType && matchesPrice && matchesCapacity && matchesVerified;
+      return matchesType && matchesPrice && matchesCapacity && matchesVerified;
     });
-  }, [query, typeFilter, activePriceRange, capacityFilter, verifiedOnly]);
+  }, [realListings, typeFilter, activePriceRange, capacityFilter, verifiedOnly]);
 
   function handleSearchSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -451,7 +460,7 @@ function TenantDashboard() {
           className="bracket-listing-card"
         >
           <div className="bracket-listing-thumb">
-            <span className="bracket-tour-badge">360° Tour</span>
+            <span className="bracket-tour-badge">Photos</span>
             {listing.verified && <span className="bracket-verified-tag">Verified</span>}
           </div>
           <div className="bracket-listing-info">
@@ -582,6 +591,32 @@ function TenantDashboard() {
     );
   }
 
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    setAccountMessage("");
+    try {
+      const response = await api.patch("/auth/me", profileForm, getAuthHeaders());
+      const next = { ...user, ...response.data.user, role: user.role };
+      localStorage.setItem("renta_user", JSON.stringify(next));
+      setUser(next);
+      setAccountMessage(response.data.message || "Profile updated.");
+    } catch (error: any) {
+      setAccountMessage(error.response?.data?.message || "Couldn't update your profile.");
+    }
+  }
+
+  async function savePassword(event: FormEvent) {
+    event.preventDefault();
+    setAccountMessage("");
+    try {
+      const response = await api.patch("/auth/password", passwordForm, getAuthHeaders());
+      setPasswordForm({ currentPassword: "", newPassword: "" });
+      setAccountMessage(response.data.message || "Password updated.");
+    } catch (error: any) {
+      setAccountMessage(error.response?.data?.message || "Couldn't change your password.");
+    }
+  }
+
   function renderAccountView() {
     return (
       <div className="profile-card">
@@ -599,10 +634,21 @@ function TenantDashboard() {
           <span className="profile-label">Email</span>
           <span className="profile-value">{user.email ?? "—"}</span>
         </div>
-        <div className="profile-row">
-          <span className="profile-label">Account type</span>
-          <span className="profile-value">Prospective tenant</span>
-        </div>
+
+        <form onSubmit={saveProfile}>
+          <input value={profileForm.firstName} onChange={(event) => setProfileForm({ ...profileForm, firstName: event.target.value })} placeholder="First name" required />
+          <input value={profileForm.lastName} onChange={(event) => setProfileForm({ ...profileForm, lastName: event.target.value })} placeholder="Last name" required />
+          <input value={profileForm.phone} onChange={(event) => setProfileForm({ ...profileForm, phone: event.target.value })} placeholder="09XXXXXXXXX" required />
+          <button type="submit">Save profile</button>
+        </form>
+
+        <form onSubmit={savePassword}>
+          <input type="password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} placeholder="Current password" required />
+          <input type="password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} placeholder="New password" required />
+          <button type="submit">Change password</button>
+        </form>
+
+        {accountMessage && <p>{accountMessage}</p>}
 
         <button className="profile-logout-btn" onClick={handleLogout}>
           Log out
@@ -656,11 +702,18 @@ function TenantDashboard() {
               {sidebarExpanded && <span>History</span>}
             </button>
             <button
+              className={activeView === "reservations" ? "yt-sidebar-item active" : "yt-sidebar-item"}
+              onClick={() => goToView("reservations")}
+            >
+              <IconClock />
+              {sidebarExpanded && <span>Reservations</span>}
+            </button>
+            <button
               className={activeView === "notifications" ? "yt-sidebar-item active" : "yt-sidebar-item"}
               onClick={() => goToView("notifications")}
             >
               <IconBell />
-              {sidebarExpanded && <span>Notifications</span>}
+              {sidebarExpanded && <span>Notifications{notifications.unread > 0 ? ` (${notifications.unread})` : ""}</span>}
             </button>
             <button
               className={activeView === "account" ? "yt-sidebar-item active" : "yt-sidebar-item"}
@@ -765,8 +818,7 @@ function TenantDashboard() {
               {hasSearched ? (
                 <section className="search-results" id="search-results-section">
                   <div className="results-heading">
-                    <h2>{filteredListings.length} sample {filteredListings.length === 1 ? "match" : "matches"}</h2>
-                    <span className="sample-note">Showing sample data — search isn't connected to live listings yet.</span>
+                    <h2>{filteredListings.length} {filteredListings.length === 1 ? "match" : "matches"}</h2>
 
                     <div className="view-toggle">
                       <button className={viewMode === "list" ? "toggle-btn active" : "toggle-btn"} onClick={() => setViewMode("list")}>List</button>
@@ -783,7 +835,7 @@ function TenantDashboard() {
                   ) : viewMode === "list" ? (
                     <div className="results-grid">
                       {filteredListings.map((listing) => (
-                        <div className="result-card" key={listing.id}>
+                        <div className="result-card" key={listing._id}>
                           <div className="result-thumb">
                             {listing.verified && <span className="verified-badge">Verified</span>}
                           </div>
@@ -802,7 +854,7 @@ function TenantDashboard() {
                     <div className="map-split">
                       <div className="map-list-column">
                         {filteredListings.map((listing) => (
-                          <div className="compact-card" key={listing.id}>
+                          <div className="compact-card" key={listing._id}>
                             {listing.verified && <span className="compact-verified">Verified</span>}
                             <h4>{listing.title}</h4>
                             <span className="compact-meta">{listing.type} · Brgy. {listing.barangay}</span>
@@ -816,7 +868,7 @@ function TenantDashboard() {
                         <MapContainer center={CALAPAN_CENTER} zoom={13} scrollWheelZoom={true} style={{ height: "500px", width: "100%", borderRadius: "18px" }}>
                           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                           {filteredListings.map((listing) => (
-                            <Marker key={listing.id} position={[listing.lat, listing.lng]} icon={createPinIcon(listing.verified)}>
+                            <Marker key={listing._id} position={[listing.lat, listing.lng]} icon={createPinIcon(listing.verified)}>
                               <Tooltip direction="top" offset={[0, -34]} opacity={1} className="listing-tooltip">
                                 <strong>{listing.title}</strong><br />
                                 {listing.type} · Brgy. {listing.barangay}<br />
@@ -887,18 +939,55 @@ function TenantDashboard() {
             </>
           )}
 
+          {activeView === "reservations" && (
+            <>
+              <div className="dash-welcome">
+                <p className="dash-eyebrow">YOUR STAYS</p>
+                <h1>My reservations</h1>
+              </div>
+              {reservationMessage && <p>{reservationMessage}</p>}
+              {myReservations.length === 0 && <p>No reservations yet.</p>}
+              {myReservations.map((reservation) => {
+                const listing = reservation.unitId;
+                const amount = reservation.downPaymentAmount || listing?.price || 0;
+                return (
+                  <article key={reservation._id} className="listing-card" style={{ marginBottom: 16, padding: 16 }}>
+                    <h3>{listing?.title || "Listing"}</h3>
+                    <p>{listing?.barangay} · {reservation.queueStatus.replaceAll("_", " ")}</p>
+                    {reservation.queueStatus === "payment_pending" && (
+                      <button type="button" onClick={() => api.post("/payments/checkout", { reservationId: reservation._id }).then((response) => { window.location.href = response.data.checkoutUrl; }).catch((error) => setReservationMessage(error.response?.data?.message || "Couldn't start payment."))}>
+                        Pay down payment
+                      </button>
+                    )}
+                    {(reservation.queueStatus === "queued" || reservation.queueStatus === "payment_pending") && (
+                      <button type="button" onClick={() => api.patch(`/reservations/${reservation._id}/cancel`, {}, getAuthHeaders()).then(() => setMyReservations((current) => current.map((item) => item._id === reservation._id ? { ...item, queueStatus: "cancelled" } : item)))}>
+                        Cancel
+                      </button>
+                    )}
+                    {reservation.queueStatus === "confirmed" && (
+                      <button type="button" onClick={() => window.print()}>Print receipt</button>
+                    )}
+                    {reservation.queueStatus === "confirmed" && (
+                      <div className="receipt">
+                        <p>RENTA receipt</p>
+                        <p>{listing?.title}</p>
+                        <p>Down payment: ₱{amount.toLocaleString()}</p>
+                        <p>Status: confirmed</p>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </>
+          )}
+
           {activeView === "notifications" && (
             <>
               <div className="dash-welcome">
                 <p className="dash-eyebrow">YOUR LISTINGS</p>
                 <h1>Notifications</h1>
-                <p className="dash-subtext">Updates about your account and saved listings.</p>
               </div>
-              <div className="empty-state">
-                <div className="empty-icon"><IconBell /></div>
-                <p className="empty-title">No notifications yet</p>
-                <p className="empty-text">You'll see updates here once RENTA's notification system is live.</p>
-              </div>
+              <NotificationList items={notifications.items} onRead={notifications.markRead} />
             </>
           )}
 

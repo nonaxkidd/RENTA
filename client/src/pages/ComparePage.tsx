@@ -58,7 +58,8 @@ function ComparePage() {
   const idA = params.get("a");
   const idB = params.get("b");
 
-  const [listings, setListings] = useState<[CompareListing, CompareListing] | null>(null);
+  const [listings, setListings] = useState<[CompareListing | null, CompareListing | null] | null>(null);
+  const [notes, setNotes] = useState<[string, string]>(["", ""]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -73,14 +74,18 @@ function ComparePage() {
     setLoading(true);
     setError("");
 
-    Promise.all([api.get(`/listings/${idA}`), api.get(`/listings/${idB}`)])
-      .then(([resA, resB]) => {
-        if (!cancelled) setListings([resA.data.listing, resB.data.listing]);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError("One of these listings couldn't be loaded. It may have been removed.");
-        }
+    Promise.all([
+      api.get(`/listings/${idA}`).then((response) => ({ listing: response.data.listing as CompareListing, note: "" })).catch(() => ({ listing: null, note: "This listing was removed." })),
+      api.get(`/listings/${idB}`).then((response) => ({ listing: response.data.listing as CompareListing, note: "" })).catch(() => ({ listing: null, note: "This listing was removed." })),
+    ])
+      .then(([first, second]) => {
+        if (cancelled) return;
+        setListings([first.listing, second.listing]);
+        setNotes([
+          first.note || (first.listing && !first.listing.available ? "This listing is no longer available." : ""),
+          second.note || (second.listing && !second.listing.available ? "This listing is no longer available." : ""),
+        ]);
+        if (!first.listing && !second.listing) setError("Both listings were removed.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -129,6 +134,19 @@ function ComparePage() {
   }
 
   const [a, b] = listings;
+  if (!a || !b) {
+    return (
+      <div className="cmpg-page">
+        {nav}
+        <div className="cmpg-center">
+          {notes[0] && <p className="cmpg-error">{notes[0]}</p>}
+          {notes[1] && <p className="cmpg-error">{notes[1]}</p>}
+          {(a || b) && <p>{[a?.title, b?.title].filter(Boolean).join(" and ")} is still listed.</p>}
+          <button className="cmpg-primary" onClick={() => navigate("/tenant")}>Choose listings</button>
+        </div>
+      </div>
+    );
+  }
   const pair = [a, b];
 
   const cheaper = a.price === b.price ? null : a.price < b.price ? a : b;
@@ -151,6 +169,10 @@ function ComparePage() {
       <main className="cmpg-main">
         <p className="cmpg-eyebrow">COMPARE</p>
         <h1 className="cmpg-title">Side by side</h1>
+
+        {(notes[0] || notes[1]) && (
+          <p className="cmpg-error">{[notes[0], notes[1]].filter(Boolean).join(" ")}</p>
+        )}
 
         <div className="cmpg-summary">
           <p>
@@ -180,7 +202,7 @@ function ComparePage() {
                   {image ? (
                     <img className="cmpg-photo" src={image} alt={listing.title} />
                   ) : (
-                    <div className="cmpg-photo placeholder" />
+                    <div className="cmpg-photo placeholder">No photo</div>
                   )}
                   <div className="cmpg-listing-body">
                     <Link to={`/listings/${listing._id}`} className="cmpg-listing-title">

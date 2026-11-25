@@ -6,6 +6,12 @@ import { User } from "../models/User";
 import type { IVerification, UserRole, UserStatus } from "../models/User";
 import { Listing } from "../models/Listing";
 import { AuditLog } from "../models/AuditLog";
+import { Reservation } from "../models/Reservation";
+import { Payment } from "../models/Payment";
+import { gmailSchema, phoneSchema, emailSchema } from "../utils/contact";
+import { decryptText } from "../utils/cryptoDocs";
+import { notify } from "../services/notify";
+import { requireObjectId } from "../utils/params";
 
 type OwnerDecision = "approve" | "revision" | "reject";
 type UserAction = "deactivate" | "reactivate" | "archive" | "restore";
@@ -56,22 +62,35 @@ const USER_ACTION_LABELS: Record<UserAction, string> = {
   restore: "Restored user",
 };
 
-const createUserSchema = z.object({
-  firstName: z.string().trim().min(1, "First name is required.").max(60, "First name is too long."),
-  lastName: z.string().trim().min(1, "Last name is required.").max(60, "Last name is too long."),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
-  role: z.enum(["tenant", "owner", "admin"], { message: "Choose a role." }),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters.")
-    .max(72, "Password can be at most 72 characters."),
-  adminPassword: z.string().min(1, "Confirm with your own password."),
-});
+const createUserSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "First name is required.").max(60, "First name is too long."),
+    lastName: z.string().trim().min(1, "Last name is required.").max(60, "Last name is too long."),
+    email: emailSchema,
+    phone: phoneSchema,
+    role: z.enum(["tenant", "owner", "admin", "superadmin"], { message: "Choose a role." }),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters.")
+      .max(72, "Password can be at most 72 characters."),
+    adminPassword: z.string().min(1, "Confirm with your own password."),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.role === "tenant" || value.role === "owner") && !gmailSchema.safeParse(value.email).success) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["email"],
+        message: "Owners and tenants must use a Gmail address (name@gmail.com).",
+      });
+    }
+  });
 
 const updateUserSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required.").max(60, "First name is too long."),
   lastName: z.string().trim().min(1, "Last name is required.").max(60, "Last name is too long."),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address."),
+  email: emailSchema,
+  phone: phoneSchema,
+  role: z.enum(["tenant", "owner", "admin", "superadmin"]).optional(),
 });
 
 const resetPasswordSchema = z.object({
@@ -85,7 +104,18 @@ const resetPasswordSchema = z.object({
 /* ---------- HELPERS ---------- */
 
 function hasBothDocs(verification?: IVerification | null) {
-  return Boolean(verification?.idDocumentUrl && verification?.authorityDocumentUrl);
+  if (!verification) return false;
+  const idReady = Boolean(verification.idDocumentKey || verification.idDocumentUrl);
+  const authorityReady = Boolean(verification.authorityDocumentKey || verification.authorityDocumentUrl);
+  return idReady && authorityReady;
+}
+
+function isPrivilegedRole(role: string) {
+  return role === "admin" || role === "superadmin";
+}
+
+function actorIsSuperadmin(req: Request) {
+  return req.auth?.role === "superadmin";
 }
 
 function ownerState(owner: {
@@ -131,24 +161,72 @@ async function confirmAdminPassword(req: Request, adminPassword: string) {
   return bcrypt.compare(adminPassword, actor.passwordHash);
 }
 
-// Stops an admin from locking themselves (or everyone) out
-async function guardAdminLockout(
+async function blockAccountChange(
   req: Request,
-  target: { _id: unknown; defaultRole: string; status: string }
+  target: { _id: mongoose.Types.ObjectId; firstName: string; lastName: string; email: string; defaultRole: string },
+  reason: string
+) {
+  await recordAudit(req, "Blocked account change", "user", target._id, userLabel(target), reason);
+}
+
+async function guardAccountChange(
+  req: Request,
+  target: {
+    _id: mongoose.Types.ObjectId;
+    firstName: string;
+    lastName: string;
+    email: string;
+    defaultRole: string;
+    status: string;
+  },
+  change: "deactivate" | "archive" | "reactivate" | "restore" | "role" | "edit" | "password",
+  nextRole?: string
 ): Promise<string | null> {
-  if (String(target._id) === req.auth?.userId) {
-    return "You can't deactivate or archive your own account.";
+  const self = String(target._id) === req.auth?.userId;
+  const superadmin = actorIsSuperadmin(req);
+
+  if ((change === "deactivate" || change === "archive") && self) {
+    const reason = "You can't deactivate or archive your own account.";
+    await blockAccountChange(req, target, reason);
+    return reason;
   }
 
-  if (target.defaultRole === "admin" && target.status === "active") {
-    const otherActiveAdmins = await User.countDocuments({
-      defaultRole: "admin",
+  if (!superadmin && change === "role" && self) {
+    const reason = "You can't change your own role.";
+    await blockAccountChange(req, target, reason);
+    return reason;
+  }
+
+  if (!superadmin && isPrivilegedRole(target.defaultRole)) {
+    const allowedSelfEdit = self && (change === "edit" || change === "password");
+    if (!allowedSelfEdit) {
+      const reason = "Only a superadmin can manage an administrator account.";
+      await blockAccountChange(req, target, reason);
+      return reason;
+    }
+  }
+
+  if (!superadmin && change === "role" && nextRole && isPrivilegedRole(nextRole)) {
+    const reason = "Only a superadmin can assign an administrator role.";
+    await blockAccountChange(req, target, reason);
+    return reason;
+  }
+
+  const removesLastSuperadmin =
+    target.defaultRole === "superadmin" &&
+    target.status === "active" &&
+    (change === "deactivate" || change === "archive" || (change === "role" && nextRole !== "superadmin"));
+
+  if (removesLastSuperadmin) {
+    const others = await User.countDocuments({
+      defaultRole: "superadmin",
       status: "active",
       _id: { $ne: target._id },
     });
-
-    if (otherActiveAdmins === 0) {
-      return "This is the only active administrator. Create another one first.";
+    if (others === 0) {
+      const reason = "This is the last active superadmin. Create another one first.";
+      await blockAccountChange(req, target, reason);
+      return reason;
     }
   }
 
@@ -200,7 +278,7 @@ export async function getStats(_req: Request, res: Response) {
 
     const [tenants, admins, totalListings, verifiedListings] = await Promise.all([
       User.countDocuments({ defaultRole: "tenant", status: { $ne: "archived" } }),
-      User.countDocuments({ defaultRole: "admin", status: { $ne: "archived" } }),
+      User.countDocuments({ defaultRole: { $in: ["admin", "superadmin"] }, status: { $ne: "archived" } }),
       Listing.countDocuments(),
       Listing.countDocuments({ verified: true }),
     ]);
@@ -234,7 +312,22 @@ export async function getOwners(_req: Request, res: Response) {
       .lean();
 
     res.json({
-      owners: owners.map((owner) => ({ ...owner, state: ownerState(owner) })),
+      owners: owners.map((owner) => ({
+        ...owner,
+        state: ownerState(owner),
+        verification: owner.verification
+          ? {
+              submittedAt: owner.verification.submittedAt,
+              reviewedAt: owner.verification.reviewedAt,
+              reviewNote: owner.verification.reviewNote,
+              revisionRequested: owner.verification.revisionRequested,
+              hasIdDocument: Boolean(owner.verification.idDocumentKey || owner.verification.idDocumentUrl),
+              hasAuthorityDocument: Boolean(owner.verification.authorityDocumentKey || owner.verification.authorityDocumentUrl),
+              idDocumentUrl: owner.verification.idDocumentKey ? undefined : decryptText(owner.verification.idDocumentUrl),
+              authorityDocumentUrl: owner.verification.authorityDocumentKey ? undefined : decryptText(owner.verification.authorityDocumentUrl),
+            }
+          : undefined,
+      })),
     });
   } catch (error) {
     console.error("Failed to fetch owners:", error);
@@ -244,9 +337,8 @@ export async function getOwners(_req: Request, res: Response) {
 
 export async function reviewOwner(req: Request, res: Response) {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: "Invalid owner id." });
-    }
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
 
     const { decision, note } = req.body as { decision?: OwnerDecision; note?: string };
 
@@ -260,7 +352,7 @@ export async function reviewOwner(req: Request, res: Response) {
       return res.status(400).json({ message: "A reason is required for this decision." });
     }
 
-    const owner = await User.findOne({ _id: req.params.id, defaultRole: "owner" });
+    const owner = await User.findOne({ _id: id, defaultRole: "owner" });
 
     if (!owner) {
       return res.status(404).json({ message: "Owner not found." });
@@ -290,6 +382,10 @@ export async function reviewOwner(req: Request, res: Response) {
 
     await owner.save();
 
+    if (decision === "approve") {
+      await notify(owner._id, "owner_verified", "Account verified", "An administrator verified your owner account.");
+    }
+
     await recordAudit(
       req,
       AUDIT_LABELS[decision],
@@ -310,7 +406,7 @@ export async function reviewOwner(req: Request, res: Response) {
 
 export async function getAdminListings(_req: Request, res: Response) {
   try {
-    const listings = await Listing.find().sort({ createdAt: -1 }).limit(300).lean();
+    const listings = await Listing.find({ archivedAt: null }).sort({ createdAt: -1 }).limit(300).lean();
     res.json({ listings });
   } catch (error) {
     console.error("Failed to fetch listings:", error);
@@ -320,29 +416,33 @@ export async function getAdminListings(_req: Request, res: Response) {
 
 export async function reviewListing(req: Request, res: Response) {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: "Invalid listing id." });
-    }
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
 
-    const { decision, note } = req.body as { decision?: "approve" | "revoke"; note?: string };
+    const { decision, note } = req.body as { decision?: "approve" | "revoke" | "disapprove"; note?: string };
 
-    if (decision !== "approve" && decision !== "revoke") {
+    if (decision !== "approve" && decision !== "revoke" && decision !== "disapprove") {
       return res.status(400).json({ message: "Invalid decision." });
     }
 
     const trimmedNote = typeof note === "string" ? note.trim().slice(0, 500) : "";
+    const removing = decision === "revoke" || decision === "disapprove";
 
-    if (decision === "revoke" && !trimmedNote) {
-      return res.status(400).json({ message: "A reason is required to revoke approval." });
+    if (removing && !trimmedNote) {
+      return res.status(400).json({ message: "A comment is required when a listing is disapproved." });
     }
 
-    const listing = await Listing.findById(req.params.id);
+    const listing = await Listing.findOne({ _id: id, archivedAt: null });
 
     if (!listing) {
       return res.status(404).json({ message: "Listing not found." });
     }
 
+    listing.reviewNote = trimmedNote || undefined;
+    listing.reviewedAt = new Date();
+
     if (decision === "approve") {
+      listing.reviewNote = undefined;
       // Listings created by an owner can only be approved after that owner is verified
       if (listing.ownerId) {
         const owner = await User.findById(listing.ownerId).select("status");
@@ -361,9 +461,24 @@ export async function reviewListing(req: Request, res: Response) {
 
     await listing.save();
 
+    if (listing.ownerId) {
+      await notify(
+        listing.ownerId,
+        decision === "approve" ? "listing_approved" : "listing_disapproved",
+        decision === "approve" ? "Listing approved" : "Listing disapproved",
+        decision === "approve"
+          ? `${listing.title} is approved.`
+          : `${listing.title} was disapproved. ${trimmedNote}`
+      );
+    }
+
     await recordAudit(
       req,
-      decision === "approve" ? "Approved listing" : "Revoked listing approval",
+      decision === "approve"
+        ? "Approved listing"
+        : decision === "disapprove"
+          ? "Disapproved listing"
+          : "Revoked listing approval",
       "listing",
       listing._id,
       `${listing.title} (${listing.barangay})`,
@@ -382,7 +497,7 @@ export async function reviewListing(req: Request, res: Response) {
 export async function getUsers(_req: Request, res: Response) {
   try {
     const users = await User.find()
-      .select("firstName lastName email defaultRole status createdAt archivedAt")
+      .select("firstName lastName email phone defaultRole status createdAt archivedAt")
       .sort({ createdAt: -1 })
       .limit(500)
       .lean();
@@ -402,7 +517,22 @@ export async function createUser(req: Request, res: Response) {
       return res.status(400).json({ message: firstIssue(parsed.error) });
     }
 
-    const { firstName, lastName, email, role, password, adminPassword } = parsed.data;
+    const { firstName, lastName, email, phone, role, password, adminPassword } = parsed.data;
+
+    if (isPrivilegedRole(role) && !actorIsSuperadmin(req)) {
+      const actor = await User.findById(req.auth?.userId);
+      if (actor) {
+        await recordAudit(
+          req,
+          "Blocked account change",
+          "user",
+          actor._id,
+          userLabel(actor),
+          "Only a superadmin can create an administrator account."
+        );
+      }
+      return res.status(403).json({ message: "Only a superadmin can create an administrator account." });
+    }
 
     if (!(await confirmAdminPassword(req, adminPassword))) {
       return res.status(403).json({ message: "Your password is incorrect." });
@@ -420,8 +550,10 @@ export async function createUser(req: Request, res: Response) {
       firstName,
       lastName,
       email,
+      phone,
       passwordHash,
       defaultRole: role,
+      emailVerified: true,
       // New owners still have to submit documents and be verified
       status: role === "owner" ? "pending" : "active",
     });
@@ -440,9 +572,8 @@ export async function createUser(req: Request, res: Response) {
 
 export async function updateUser(req: Request, res: Response) {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: "Invalid user id." });
-    }
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
 
     const parsed = updateUserSchema.safeParse(req.body);
 
@@ -450,12 +581,22 @@ export async function updateUser(req: Request, res: Response) {
       return res.status(400).json({ message: firstIssue(parsed.error) });
     }
 
-    const { firstName, lastName, email } = parsed.data;
+    const { firstName, lastName, email, phone, role } = parsed.data;
 
-    const target = await User.findById(req.params.id);
+    const target = await User.findById(id);
 
     if (!target) {
       return res.status(404).json({ message: "User not found." });
+    }
+
+    const blocked = await guardAccountChange(req, target, role && role !== target.defaultRole ? "role" : "edit", role);
+    if (blocked) {
+      return res.status(403).json({ message: blocked });
+    }
+
+    const nextRole = role ?? target.defaultRole;
+    if ((nextRole === "tenant" || nextRole === "owner") && !gmailSchema.safeParse(email).success) {
+      return res.status(400).json({ message: "Owners and tenants must use a Gmail address (name@gmail.com)." });
     }
 
     if (target.status === "archived") {
@@ -478,6 +619,12 @@ export async function updateUser(req: Request, res: Response) {
     if (email !== target.email) {
       changes.push(`Email: ${target.email} → ${email}`);
     }
+    if (phone !== target.phone) {
+      changes.push("Contact number updated");
+    }
+    if (role && role !== target.defaultRole) {
+      changes.push(`Role: ${target.defaultRole} → ${role}`);
+    }
 
     if (changes.length === 0) {
       return res.json({ message: "Nothing to change." });
@@ -486,6 +633,8 @@ export async function updateUser(req: Request, res: Response) {
     target.firstName = firstName;
     target.lastName = lastName;
     target.email = email;
+    target.phone = phone;
+    if (role) target.defaultRole = role;
 
     await target.save();
 
@@ -503,9 +652,8 @@ export async function updateUser(req: Request, res: Response) {
 
 export async function setUserStatus(req: Request, res: Response) {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: "Invalid user id." });
-    }
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
 
     const { action, note } = req.body as { action?: UserAction; note?: string };
 
@@ -519,7 +667,7 @@ export async function setUserStatus(req: Request, res: Response) {
       return res.status(400).json({ message: "A reason is required for this action." });
     }
 
-    const target = await User.findById(req.params.id);
+    const target = await User.findById(id);
 
     if (!target) {
       return res.status(404).json({ message: "User not found." });
@@ -531,12 +679,9 @@ export async function setUserStatus(req: Request, res: Response) {
         .json({ message: `Can't ${action} an account whose status is ${target.status}.` });
     }
 
-    if (action === "deactivate" || action === "archive") {
-      const blocked = await guardAdminLockout(req, target);
-
-      if (blocked) {
-        return res.status(400).json({ message: blocked });
-      }
+    const blocked = await guardAccountChange(req, target, action);
+    if (blocked) {
+      return res.status(403).json({ message: blocked });
     }
 
     if (action === "deactivate") {
@@ -568,9 +713,8 @@ export async function setUserStatus(req: Request, res: Response) {
 
 export async function resetUserPassword(req: Request, res: Response) {
   try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: "Invalid user id." });
-    }
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
 
     const parsed = resetPasswordSchema.safeParse(req.body);
 
@@ -584,7 +728,7 @@ export async function resetUserPassword(req: Request, res: Response) {
       return res.status(403).json({ message: "Your password is incorrect." });
     }
 
-    const target = await User.findById(req.params.id);
+    const target = await User.findById(id);
 
     if (!target) {
       return res.status(404).json({ message: "User not found." });
@@ -592,6 +736,11 @@ export async function resetUserPassword(req: Request, res: Response) {
 
     if (target.status === "archived") {
       return res.status(400).json({ message: "Restore this account before resetting its password." });
+    }
+
+    const blocked = await guardAccountChange(req, target, "password");
+    if (blocked) {
+      return res.status(403).json({ message: blocked });
     }
 
     target.passwordHash = await bcrypt.hash(newPassword, 12);
@@ -613,7 +762,7 @@ export async function getReports(_req: Request, res: Response) {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const [listingsByType, listingsByBarangay, priceStats, availability, usersByRole, staleListings] =
+    const [listingsByType, listingsByBarangay, priceStats, availability, usersByRole, staleListings, reservations, payments] =
       await Promise.all([
         Listing.aggregate([
           { $group: { _id: "$type", count: { $sum: 1 }, avgPrice: { $avg: "$price" } } },
@@ -641,6 +790,8 @@ export async function getReports(_req: Request, res: Response) {
           { $group: { _id: "$defaultRole", count: { $sum: 1 } } },
         ]),
         Listing.countDocuments({ updatedAt: { $lt: thirtyDaysAgo } }),
+        Reservation.aggregate([{ $group: { _id: "$queueStatus", count: { $sum: 1 } } }]),
+        Payment.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
       ]);
 
     res.json({
@@ -650,6 +801,8 @@ export async function getReports(_req: Request, res: Response) {
       availability,
       usersByRole,
       staleListings,
+      reservations,
+      payments,
     });
   } catch (error) {
     console.error("Failed to build reports:", error);
@@ -709,5 +862,45 @@ export async function getAuditLog(req: Request, res: Response) {
   } catch (error) {
     console.error("Failed to fetch audit log:", error);
     res.status(500).json({ message: "Failed to fetch audit log." });
+  }
+}
+
+export async function getPayments(req: Request, res: Response) {
+  try {
+    const status = asString(req.query.status);
+    const filter: Record<string, unknown> = {};
+    if (status && ["pending", "paid", "cancelled", "needs_refund", "refunded"].includes(status)) {
+      filter.status = status;
+    }
+    const payments = await Payment.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate("tenantId", "firstName lastName email")
+      .populate("listingId", "title barangay")
+      .lean();
+    res.json({ payments });
+  } catch (error) {
+    console.error("Failed to fetch payments:", error);
+    res.status(500).json({ message: "Failed to fetch payments." });
+  }
+}
+
+export async function markPaymentRefunded(req: Request, res: Response) {
+  try {
+    const id = requireObjectId(req, res, "id");
+    if (!id) return;
+    const payment = await Payment.findById(id);
+    if (!payment) return res.status(404).json({ message: "Payment not found." });
+    if (payment.status !== "needs_refund") {
+      return res.status(400).json({ message: "Only a payment that needs a refund can be marked refunded." });
+    }
+    payment.status = "refunded";
+    payment.note = "Marked refunded by an administrator.";
+    await payment.save();
+    await recordAudit(req, "Marked payment refunded", "listing", payment.listingId, `Payment ${payment._id}`, payment.note);
+    res.json({ message: "Payment marked refunded.", status: payment.status });
+  } catch (error) {
+    console.error("Failed to mark refund:", error);
+    res.status(500).json({ message: "Failed to update the payment." });
   }
 }

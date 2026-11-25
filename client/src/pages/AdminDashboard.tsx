@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../services/api";
+import { contactFieldError } from "../utils/contact";
 import "./AdminDashboard.css";
 
 interface RentaUser {
   firstName?: string;
   lastName?: string;
   email?: string;
+  role?: string;
 }
 
 type OwnerState =
@@ -16,12 +18,13 @@ type OwnerState =
   | "not_submitted"
   | "approved"
   | "rejected"
-  | "suspended";
+  | "suspended"
+  | "archived";
 
-type ActiveView = "overview" | "owners" | "listings" | "reports" | "users" | "audit" | "account";
+type ActiveView = "overview" | "owners" | "listings" | "reports" | "users" | "payments" | "audit" | "account";
 type OwnerFilter = OwnerState | "all";
 type ListingFilter = "unverified" | "verified" | "all";
-type UserFilter = "all" | "tenant" | "owner" | "admin";
+type UserFilter = "all" | "tenant" | "owner" | "admin" | "superadmin";
 type IconName =
   | "menu"
   | "grid"
@@ -36,10 +39,21 @@ type IconName =
 interface Verification {
   idDocumentUrl?: string;
   authorityDocumentUrl?: string;
+  hasIdDocument?: boolean;
+  hasAuthorityDocument?: boolean;
   submittedAt?: string;
   reviewedAt?: string;
   reviewNote?: string;
   revisionRequested?: boolean;
+}
+
+interface AdminPayment {
+  _id: string;
+  amount: number;
+  status: string;
+  note?: string;
+  tenantId?: { firstName?: string; lastName?: string; email?: string };
+  listingId?: { title?: string; barangay?: string };
 }
 
 interface AdminOwner {
@@ -64,6 +78,7 @@ interface AdminListing {
   available: boolean;
   ownerName: string;
   imageUrl?: string;
+  reviewNote?: string;
   createdAt: string;
 }
 
@@ -72,6 +87,7 @@ interface AdminUser {
   firstName: string;
   lastName: string;
   email: string;
+  phone?: string;
   defaultRole: string;
   status: string;
   createdAt: string;
@@ -99,6 +115,8 @@ interface Reports {
   availability: { _id: boolean; count: number }[];
   usersByRole: { _id: string; count: number }[];
   staleListings: number;
+  reservations?: { _id: string; count: number }[];
+  payments?: { _id: string; count: number }[];
 }
 
 interface ReviewTarget {
@@ -131,6 +149,7 @@ const STATE_LABEL: Record<OwnerState, string> = {
   approved: "Approved",
   rejected: "Rejected",
   suspended: "Suspended",
+  archived: "Archived",
 };
 
 const STATE_TONE: Record<OwnerState, string> = {
@@ -140,6 +159,7 @@ const STATE_TONE: Record<OwnerState, string> = {
   approved: "good",
   rejected: "bad",
   suspended: "bad",
+  archived: "muted",
 };
 
 const OWNER_ACTIONS: Record<OwnerState, string[]> = {
@@ -149,6 +169,7 @@ const OWNER_ACTIONS: Record<OwnerState, string[]> = {
   approved: ["suspend"],
   rejected: ["approve"],
   suspended: ["reactivate"],
+  archived: [],
 };
 
 const OWNER_DECISIONS: Record<string, DecisionMeta> = {
@@ -162,6 +183,7 @@ const OWNER_DECISIONS: Record<string, DecisionMeta> = {
 const LISTING_DECISIONS: Record<string, DecisionMeta> = {
   approve: { label: "Approve listing", noteRequired: false, tone: "primary" },
   revoke: { label: "Revoke approval", noteRequired: true, tone: "danger" },
+  disapprove: { label: "Disapprove listing", noteRequired: true, tone: "danger" },
 };
 
 /* ---------- ICONS (hand-built line icons, no external library) ---------- */
@@ -408,13 +430,24 @@ function BarList({ items }: { items: { label: string; value: number; sub?: strin
   );
 }
 
-function DocLink({ label, url }: { label: string; url?: string }) {
+function DocLink({ label, url, ownerId, kind, stored }: { label: string; url?: string; ownerId?: string; kind?: "id" | "authority"; stored?: boolean }) {
   const href = safeHref(url);
+
+  async function openStored() {
+    const response = await api.get(`/admin/owners/${ownerId}/documents/${kind}`, {
+      ...getAuthHeaders(),
+      responseType: "blob",
+    });
+    const blobUrl = URL.createObjectURL(response.data);
+    window.open(blobUrl);
+  }
 
   return (
     <div className="adash-doc">
       <span className="adash-doc-label">{label}</span>
-      {!url ? (
+      {stored ? (
+        <button type="button" className="adash-doc-link" onClick={openStored}>Open document</button>
+      ) : !url ? (
         <span className="adash-doc-missing">Not submitted</span>
       ) : href ? (
         <a href={href} target="_blank" rel="noopener noreferrer" className="adash-doc-link">
@@ -495,13 +528,58 @@ function AdminDashboard() {
   const [reviewNote, setReviewNote] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewError, setReviewError] = useState("");
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditFrom, setAuditFrom] = useState("");
+  const [auditTo, setAuditTo] = useState("");
+  const [auditTarget, setAuditTarget] = useState("");
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [userForm, setUserForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    role: "tenant",
+    password: "",
+    adminPassword: "",
+  });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    newPassword: "",
+    adminPassword: "",
+    note: "",
+    role: "tenant",
+  });
+  const [paymentStatus, setPaymentStatus] = useState("");
+  const [userMessage, setUserMessage] = useState("");
+  const [userBusy, setUserBusy] = useState(false);
+
+  const auditPath = useMemo(() => {
+    const params = new URLSearchParams();
+    if (auditSearch.trim()) params.set("search", auditSearch.trim());
+    if (auditFrom) params.set("from", auditFrom);
+    if (auditTo) params.set("to", auditTo);
+    if (auditTarget) params.set("targetType", auditTarget);
+    const query = params.toString();
+    return query ? `/admin/audit?${query}` : "/admin/audit";
+  }, [auditSearch, auditFrom, auditTo, auditTarget]);
 
   const stats = useAdminData<Stats>("/admin/stats", true);
   const owners = useAdminData<{ owners: AdminOwner[] }>("/admin/owners", activeView === "owners");
   const listings = useAdminData<{ listings: AdminListing[] }>("/admin/listings", activeView === "listings");
   const reports = useAdminData<Reports>("/admin/reports", activeView === "reports");
   const users = useAdminData<{ users: AdminUser[] }>("/admin/users", activeView === "users");
-  const audit = useAdminData<{ entries: AuditEntry[] }>("/admin/audit", activeView === "audit");
+  const payments = useAdminData<{ payments: AdminPayment[] }>(
+    paymentStatus ? `/admin/payments?status=${paymentStatus}` : "/admin/payments",
+    activeView === "payments"
+  );
+  const audit = useAdminData<{ entries: AuditEntry[]; total?: number }>(
+    auditPath,
+    activeView === "audit" || activeView === "reports"
+  );
 
   const awaitingCount = stats.data?.owners.awaiting_review ?? 0;
   const unverifiedCount = stats.data?.listings.unverified ?? 0;
@@ -570,6 +648,150 @@ function AdminDashboard() {
     } finally {
       setReviewBusy(false);
     }
+  }
+
+  function openUserEditor(account: AdminUser) {
+    setEditingId(account._id);
+    setEditForm({
+      firstName: account.firstName,
+      lastName: account.lastName,
+      email: account.email,
+      phone: account.phone || "",
+      newPassword: "",
+      adminPassword: "",
+      note: "",
+      role: account.defaultRole,
+    });
+    setUserMessage("");
+  }
+
+  async function saveUserEdits() {
+    if (!editingId) return;
+    const problem = contactFieldError(editForm.role, editForm.email, editForm.phone);
+    if (problem) {
+      setUserMessage(problem);
+      return;
+    }
+    setUserBusy(true);
+    setUserMessage("");
+    try {
+      await api.patch(
+        `/admin/users/${editingId}`,
+        {
+          firstName: editForm.firstName,
+          lastName: editForm.lastName,
+          email: editForm.email,
+          phone: editForm.phone,
+          ...(user.role === "superadmin" ? { role: editForm.role } : {}),
+        },
+        getAuthHeaders()
+      );
+      if (editForm.newPassword) {
+        await api.patch(
+          `/admin/users/${editingId}/password`,
+          { newPassword: editForm.newPassword, adminPassword: editForm.adminPassword },
+          getAuthHeaders()
+        );
+      }
+      setUserMessage("Account updated. The password is stored hashed.");
+      setEditingId(null);
+      users.reload();
+      audit.reload();
+    } catch (err: any) {
+      setUserMessage(err.response?.data?.message || "Couldn't update this account.");
+    } finally {
+      setUserBusy(false);
+    }
+  }
+
+  async function changeAccountStatus(id: string, action: "deactivate" | "reactivate" | "archive" | "restore") {
+    setUserBusy(true);
+    setUserMessage("");
+    try {
+      await api.patch(
+        `/admin/users/${id}/status`,
+        { action, note: editForm.note },
+        getAuthHeaders()
+      );
+      setUserMessage(`Account ${action}d.`);
+      users.reload();
+      stats.reload();
+      audit.reload();
+    } catch (err: any) {
+      setUserMessage(err.response?.data?.message || "Couldn't change this account.");
+    } finally {
+      setUserBusy(false);
+    }
+  }
+
+  async function createAccount(event: FormEvent) {
+    event.preventDefault();
+    const problem = contactFieldError(userForm.role, userForm.email, userForm.phone);
+    if (problem) {
+      setUserMessage(problem);
+      return;
+    }
+    setUserBusy(true);
+    setUserMessage("");
+    try {
+      await api.post("/admin/users", userForm, getAuthHeaders());
+      setShowCreateUser(false);
+      setUserForm({ firstName: "", lastName: "", email: "", phone: "", role: "tenant", password: "", adminPassword: "" });
+      setUserMessage("User added. The password is stored hashed.");
+      users.reload();
+      audit.reload();
+    } catch (err: any) {
+      setUserMessage(err.response?.data?.message || "Couldn't add this user.");
+    } finally {
+      setUserBusy(false);
+    }
+  }
+
+  function renderAuditFilters() {
+    return (
+      <div className="adash-filters">
+        <input
+          placeholder="Search logs"
+          value={auditSearch}
+          onChange={(event) => setAuditSearch(event.target.value)}
+        />
+        <select value={auditTarget} onChange={(event) => setAuditTarget(event.target.value)}>
+          <option value="">All targets</option>
+          <option value="owner">Owners</option>
+          <option value="listing">Listings</option>
+          <option value="user">Users</option>
+        </select>
+        <input type="date" value={auditFrom} onChange={(event) => setAuditFrom(event.target.value)} />
+        <input type="date" value={auditTo} onChange={(event) => setAuditTo(event.target.value)} />
+      </div>
+    );
+  }
+
+  function renderAuditEntries() {
+    return renderAsync(audit, ({ entries, total }) =>
+      entries.length === 0 ? (
+        <div className="adash-empty">
+          <p className="adash-empty-title">No activity yet</p>
+          <p className="adash-empty-text">Decisions you make will be recorded here.</p>
+        </div>
+      ) : (
+        <div className="adash-audit-list">
+          <p className="adash-card-meta">{total ?? entries.length} matching records</p>
+          {entries.map((entry) => (
+            <div className="adash-audit-row" key={entry._id}>
+              <div className="adash-audit-main">
+                <span className="adash-audit-action">{entry.action}</span>
+                <span className="adash-audit-target">{entry.targetLabel}</span>
+              </div>
+              <p className="adash-card-meta">
+                {entry.actorName} · {formatDateTime(entry.createdAt)}
+              </p>
+              {entry.note && <p className="adash-note">“{entry.note}”</p>}
+            </div>
+          ))}
+        </div>
+      )
+    );
   }
 
   /* ----- VIEWS ----- */
@@ -679,8 +901,8 @@ function AdminDashboard() {
                       </div>
 
                       <div className="adash-doc-grid">
-                        <DocLink label="Government-issued ID" url={v?.idDocumentUrl} />
-                        <DocLink label="Proof of ownership / authority" url={v?.authorityDocumentUrl} />
+                        <DocLink label="Government-issued ID" url={v?.idDocumentUrl} ownerId={owner._id} kind="id" stored={Boolean(v?.hasIdDocument && !v?.idDocumentUrl)} />
+                        <DocLink label="Proof of ownership / authority" url={v?.authorityDocumentUrl} ownerId={owner._id} kind="authority" stored={Boolean(v?.hasAuthorityDocument && !v?.authorityDocumentUrl)} />
                       </div>
 
                       {v?.submittedAt && (
@@ -775,8 +997,11 @@ function AdminDashboard() {
                       </p>
                       <p className="adash-card-meta">
                         Added {formatDate(listing.createdAt)} ·{" "}
-                        {listing.available ? "Available" : "Occupied"}
+                        {listing.available ? "Available" : "Reserved"}
                       </p>
+                      {listing.reviewNote && !listing.verified && (
+                        <p className="adash-note">Disapproval comment: {listing.reviewNote}</p>
+                      )}
                     </div>
                     <span className={`adash-pill ${listing.verified ? "good" : "warn"}`}>
                       {listing.verified ? "Approved" : "Awaiting approval"}
@@ -790,12 +1015,20 @@ function AdminDashboard() {
                           Revoke
                         </button>
                       ) : (
-                        <button
-                          className="adash-btn primary"
-                          onClick={() => openReview("listing", listing._id, listing.title, "approve")}
-                        >
-                          Approve
-                        </button>
+                        <>
+                          <button
+                            className="adash-btn primary"
+                            onClick={() => openReview("listing", listing._id, listing.title, "approve")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="adash-btn danger"
+                            onClick={() => openReview("listing", listing._id, listing.title, "disapprove")}
+                          >
+                            Disapprove
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -832,6 +1065,18 @@ function AdminDashboard() {
                 />
                 <StatCard label="Occupied listings" value={occupied} />
                 <StatCard label="Not updated in 30+ days" value={r.staleListings} />
+                <StatCard
+                  label="Paid down payments"
+                  value={r.payments?.find((payment) => payment._id === "paid")?.count ?? 0}
+                />
+                <StatCard
+                  label="Open reservations"
+                  value={
+                    r.reservations
+                      ?.filter((item) => item._id === "queued" || item._id === "payment_pending")
+                      .reduce((sum, item) => sum + item.count, 0) ?? 0
+                  }
+                />
               </div>
 
               <div className="adash-report-grid">
@@ -871,11 +1116,10 @@ function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="adash-notice">
-                <strong>Not available yet:</strong> tenant-submitted listing reports, review
-                moderation, and reservation or test-payment monitoring. Those features haven't been
-                built, so there's no data to report on.
-              </div>
+              <h2 className="adash-section-title">Activity history</h2>
+              <p className="adash-card-meta">Filter administrator logs by text, target, or date.</p>
+              {renderAuditFilters()}
+              {renderAuditEntries()}
             </>
           );
         })}
@@ -883,10 +1127,84 @@ function AdminDashboard() {
     );
   }
 
+  async function markRefunded(id: string) {
+    setUserMessage("");
+    try {
+      await api.patch(`/admin/payments/${id}/refund`, {}, getAuthHeaders());
+      payments.reload();
+      audit.reload();
+    } catch (err: any) {
+      setUserMessage(err.response?.data?.message || "Couldn't mark this payment refunded.");
+    }
+  }
+
+  function renderPaymentsView() {
+    return (
+      <>
+        <PageHeader eyebrow="MANAGE" title="Payments" subtitle="Down payments, including ones that need a refund." />
+        {userMessage && <p className="adash-note">{userMessage}</p>}
+        <select value={paymentStatus} onChange={(event) => setPaymentStatus(event.target.value)}>
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="paid">Paid</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="needs_refund">Needs refund</option>
+          <option value="refunded">Refunded</option>
+        </select>
+        {renderAsync(payments, ({ payments: rows }) => (
+          rows.length === 0 ? <p className="adash-muted">No payments match this filter.</p> : (
+            <div className="adash-audit-list">
+              {rows.map((payment) => (
+                <div className="adash-audit-row" key={payment._id}>
+                  <div className="adash-audit-main">
+                    <span className="adash-audit-action">{payment.listingId?.title || "Listing"}</span>
+                    <span className="adash-audit-target">₱{payment.amount.toLocaleString()} · {payment.status}</span>
+                  </div>
+                  <p className="adash-card-meta">
+                    {payment.tenantId ? `${payment.tenantId.firstName || ""} ${payment.tenantId.lastName || ""}`.trim() : "Tenant"}
+                    {payment.listingId?.barangay ? ` · ${payment.listingId.barangay}` : ""}
+                  </p>
+                  {payment.status === "needs_refund" && (
+                    <button type="button" className="adash-btn neutral" onClick={() => markRefunded(payment._id)}>Mark refunded</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        ))}
+      </>
+    );
+  }
+
   function renderUsersView() {
     return (
       <>
-        <PageHeader eyebrow="MANAGE" title="Users" subtitle="Everyone with a RENTA account." />
+        <PageHeader
+          eyebrow="MANAGE"
+          title="Users"
+          subtitle="Add or edit accounts, reset a hashed password, or deactivate, archive, and restore them."
+        />
+        <button className="adash-btn primary" onClick={() => setShowCreateUser((open) => !open)}>
+          {showCreateUser ? "Close" : "Add user"}
+        </button>
+        {userMessage && <p className="adash-note">{userMessage}</p>}
+        {showCreateUser && (
+          <form className="adash-inline-form" onSubmit={createAccount}>
+            <input placeholder="First name" value={userForm.firstName} onChange={(event) => setUserForm({ ...userForm, firstName: event.target.value })} required />
+            <input placeholder="Last name" value={userForm.lastName} onChange={(event) => setUserForm({ ...userForm, lastName: event.target.value })} required />
+            <input type="email" placeholder="name@gmail.com" value={userForm.email} onChange={(event) => setUserForm({ ...userForm, email: event.target.value })} required />
+            <input placeholder="09XXXXXXXXX" value={userForm.phone} onChange={(event) => setUserForm({ ...userForm, phone: event.target.value })} required />
+            <select value={userForm.role} onChange={(event) => setUserForm({ ...userForm, role: event.target.value })}>
+              <option value="tenant">Tenant</option>
+              <option value="owner">Owner</option>
+              {user.role === "superadmin" && <option value="admin">Admin</option>}
+              {user.role === "superadmin" && <option value="superadmin">Superadmin</option>}
+            </select>
+            <input type="password" placeholder="Password (hashed when saved)" value={userForm.password} onChange={(event) => setUserForm({ ...userForm, password: event.target.value })} required />
+            <input type="password" placeholder="Your admin password" value={userForm.adminPassword} onChange={(event) => setUserForm({ ...userForm, adminPassword: event.target.value })} required />
+            <button className="adash-btn primary" disabled={userBusy}>Save user</button>
+          </form>
+        )}
 
         {renderAsync(users, ({ users: list }) => {
           const visible = userFilter === "all" ? list : list.filter((u) => u.defaultRole === userFilter);
@@ -901,31 +1219,69 @@ function AdminDashboard() {
                   { key: "tenant", label: "Tenants", count: list.filter((u) => u.defaultRole === "tenant").length },
                   { key: "owner", label: "Owners", count: list.filter((u) => u.defaultRole === "owner").length },
                   { key: "admin", label: "Admins", count: list.filter((u) => u.defaultRole === "admin").length },
+                  { key: "superadmin", label: "Superadmins", count: list.filter((u) => u.defaultRole === "superadmin").length },
                 ]}
               />
 
               <div className="adash-table-wrap">
                 <div className="adash-table">
-                  <div className="adash-table-row head">
+                  <div className="adash-table-row users head">
                     <span>Name</span>
                     <span>Email</span>
+                    <span>Phone</span>
                     <span>Role</span>
                     <span>Status</span>
-                    <span>Joined</span>
+                    <span>Actions</span>
                   </div>
                   {visible.map((u) => (
-                    <div className="adash-table-row" key={u._id}>
+                    <div className="adash-table-row users" key={u._id}>
                       <span>
                         {u.firstName} {u.lastName}
                       </span>
                       <span>{u.email}</span>
+                      <span>{u.phone || "—"}</span>
                       <span className="adash-cap">{u.defaultRole}</span>
                       <span className="adash-cap">{u.status}</span>
-                      <span>{formatDate(u.createdAt)}</span>
+                      <span>
+                        <button className="adash-btn neutral" onClick={() => openUserEditor(u)}>Edit</button>
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
+              {editingId && (
+                <form
+                  className="adash-inline-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    saveUserEdits();
+                  }}
+                >
+                  <h2 className="adash-panel-title">Recover or edit account</h2>
+                  <input value={editForm.firstName} onChange={(event) => setEditForm({ ...editForm, firstName: event.target.value })} required />
+                  <input value={editForm.lastName} onChange={(event) => setEditForm({ ...editForm, lastName: event.target.value })} required />
+                  <input type="email" value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} required />
+                  <input placeholder="09XXXXXXXXX" value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} required />
+                  {user.role === "superadmin" && (
+                    <select value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value })}>
+                      <option value="tenant">Tenant</option>
+                      <option value="owner">Owner</option>
+                      <option value="admin">Admin</option>
+                      <option value="superadmin">Superadmin</option>
+                    </select>
+                  )}
+                  <input type="password" placeholder="New password (optional)" value={editForm.newPassword} onChange={(event) => setEditForm({ ...editForm, newPassword: event.target.value })} />
+                  <input type="password" placeholder="Your admin password (required to reset password)" value={editForm.adminPassword} onChange={(event) => setEditForm({ ...editForm, adminPassword: event.target.value })} />
+                  <input placeholder="Reason for deactivate or archive" value={editForm.note} onChange={(event) => setEditForm({ ...editForm, note: event.target.value })} />
+                  <div className="adash-user-actions">
+                    <button className="adash-btn primary" disabled={userBusy}>Save edits</button>
+                    <button type="button" className="adash-btn danger" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "deactivate")}>Deactivate</button>
+                    <button type="button" className="adash-btn neutral" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "reactivate")}>Activate</button>
+                    <button type="button" className="adash-btn danger" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "archive")}>Archive</button>
+                    <button type="button" className="adash-btn neutral" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "restore")}>Restore</button>
+                  </div>
+                </form>
+              )}
             </>
           );
         })}
@@ -942,29 +1298,8 @@ function AdminDashboard() {
           subtitle="A record of every administrative decision, with the reason given."
         />
 
-        {renderAsync(audit, ({ entries }) =>
-          entries.length === 0 ? (
-            <div className="adash-empty">
-              <p className="adash-empty-title">No activity yet</p>
-              <p className="adash-empty-text">Decisions you make will be recorded here.</p>
-            </div>
-          ) : (
-            <div className="adash-audit-list">
-              {entries.map((entry) => (
-                <div className="adash-audit-row" key={entry._id}>
-                  <div className="adash-audit-main">
-                    <span className="adash-audit-action">{entry.action}</span>
-                    <span className="adash-audit-target">{entry.targetLabel}</span>
-                  </div>
-                  <p className="adash-card-meta">
-                    {entry.actorName} · {formatDateTime(entry.createdAt)}
-                  </p>
-                  {entry.note && <p className="adash-note">“{entry.note}”</p>}
-                </div>
-              ))}
-            </div>
-          )
-        )}
+        {renderAuditFilters()}
+        {renderAuditEntries()}
       </>
     );
   }
@@ -1084,6 +1419,13 @@ function AdminDashboard() {
               expanded={sidebarExpanded}
               onClick={() => setActiveView("users")}
             />
+            <SidebarItem
+              icon="clipboard"
+              label="Payments"
+              active={activeView === "payments"}
+              expanded={sidebarExpanded}
+              onClick={() => setActiveView("payments")}
+            />
           </div>
 
           <div className="adash-sidebar-divider" />
@@ -1117,6 +1459,7 @@ function AdminDashboard() {
             {activeView === "listings" && renderListingsView()}
             {activeView === "reports" && renderReportsView()}
             {activeView === "users" && renderUsersView()}
+            {activeView === "payments" && renderPaymentsView()}
             {activeView === "audit" && renderAuditView()}
             {activeView === "account" && renderAccountView()}
           </div>

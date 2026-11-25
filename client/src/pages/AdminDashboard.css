@@ -704,6 +704,41 @@
   border-bottom: none;
 }
 
+.adash-table-row.users {
+  grid-template-columns: 1.2fr 1.6fr 1fr 0.7fr 0.8fr 0.7fr;
+}
+
+.adash-inline-form,
+.adash-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.adash-inline-form {
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e2ded0;
+  border-radius: 16px;
+}
+
+.adash-inline-form input,
+.adash-inline-form select,
+.adash-filters input,
+.adash-filters select {
+  border: 1px solid #e2ded0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.adash-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .adash-table-row.head {
   background: #f3f2eb;
   font-weight: 700;

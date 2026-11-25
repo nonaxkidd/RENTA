@@ -553,6 +553,18 @@ a.listing-card {
   color: var(--renta-dark-text);
 }
 
+.verified-pill {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  background: #b5ee7c;
+  color: #061f29;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
 /* RESPONSIVE */
 
 @media (max-width: 900px) {

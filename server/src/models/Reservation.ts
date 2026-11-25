@@ -27,6 +27,7 @@ export interface IReservation extends Document {
   ownerDecisionAt?: Date;
   ownerResponse?: string;
   paymentDeadlineAt?: Date;
+  downPaymentAmount?: number;
   cancellationReason?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -113,6 +114,10 @@ const reservationSchema = new Schema<IReservation>(
     },
     paymentDeadlineAt: {
       type: Date,
+    },
+    downPaymentAmount: {
+      type: Number,
+      min: 0,
     },
     cancellationReason: {
       type: String,

@@ -1,0 +1,506 @@
+RENTA system brief
+Calapan City long-term rental web app
+Written 25 Nov 2026 for an outside review (Claude or another reviewer).
+This describes the UPDATED app in c:\Users\airho\Codes\RENTA.
+Do not treat the comparison copy as the product.
+
+============================================================
+1. What this app is
+============================================================
+
+RENTA is a school capstone web app for long-term rentals in Calapan City,
+Oriental Mindoro. Three roles use it:
+
+- Tenant: browse listings, save them, compare two, reserve with a one-month
+  down payment, rate an owner after payment is confirmed.
+- Owner: verify identity, create a listing by picking a barangay and pinning
+  a map, approve or reject reservation requests.
+- Admin: approve owners and listings, manage users, read reports and an
+  audit log.
+
+Stack:
+- Client: React 19, Vite 8, React Router, Leaflet / react-leaflet, Axios.
+  API base URL is hardcoded in client/src/services/api.ts as
+  http://localhost:5000/api/v1.
+- Server: Express 5, TypeScript, Mongoose 9, JWT (7 days), bcrypt cost 12, Zod.
+- Database intended: MongoDB Atlas database name "renta".
+  This machine cannot reach Atlas (IP not on the Atlas Network Access list,
+  and local DNS cannot resolve the SRV record unless public DNS is forced).
+  A temporary in-memory MongoDB is used instead. See section 8.
+- PWA: vite-plugin-pwa, name RENTA, display standalone, theme #061f29.
+  Service worker caches the app shell only. Listings and login still need
+  the network. Phone install needs HTTPS hosting.
+
+There is a second folder, c:\Users\airho\Codes\RENTA-before, which is the
+original GitHub code plus only the port and DNS edits needed to run it.
+It is the "before" copy for comparison. Do not add features there.
+
+Ports when both are running:
+- Updated site   http://127.0.0.1:5173     API http://localhost:5000
+- Original site  http://127.0.0.1:5174     API http://localhost:5001
+- Local database mongodb://127.0.0.1:27018/renta
+  (started by server/src/scripts/localMongo.ts; data disappears when that
+  process stops)
+
+Local demo accounts (email already verified, status active). These are NOT
+the real Atlas users:
+- tenant@gmail.com / Tenant12345!
+- owner@gmail.com  / Owner12345!
+- admin@renta.local / Admin12345!
+
+Login tokens are stored in localStorage as renta_token and renta_user.
+The two sites are different origins, so a login on 5173 does not log in 5174.
+
+============================================================
+2. Routes and screens
+============================================================
+
+Public
+- /                 Landing
+- /login            Sign in, and Gmail OTP if the account is not verified
+- /register         Create tenant or owner, then Gmail OTP
+- /listings/:id     Listing detail (public to view)
+
+Signed in
+- /tenant           Tenant dashboard. Tenant role only.
+- /owner            Owner dashboard. Owner role only.
+- /admin            Admin dashboard. Admin role only.
+- /compare?a=&b=    Side-by-side compare. Tenant role only.
+
+ProtectedRoute sends the wrong role away. There is no "forgot password"
+flow. The button only shows the text "Password recovery will be available
+soon." An admin can reset a user's password from the Users screen.
+
+------------------------------------------------------------
+Landing (/)
+------------------------------------------------------------
+Nav: How it works, Discover, For owners, Sign in.
+Hero: headline, a search box, counts (active listings, barangays mapped,
+"360° tours"). The search box does not search. Submit is prevented and the
+text is ignored. "Explore rentals" does not go anywhere useful.
+Map of Calapan with listing pins (Leaflet, OpenStreetMap).
+Listing carousel. Cards can show a photo if imageUrl exists, and a verified
+pill.
+Owner call-to-action: "List your accommodation".
+Known copy still promises "immersive 360° views" even though no 360 viewer
+exists.
+
+------------------------------------------------------------
+Login (/login)
+------------------------------------------------------------
+Left brand panel (hidden under 900px). Right card:
+- "← Back to home" goes to /
+- Email, password, Forgot password (stub)
+- Sign in
+- Link to Create an account
+If the API says the email is not verified, the same card switches to a
+6-digit OTP field. Resend exists on the register OTP step; check login OTP
+for the same.
+
+------------------------------------------------------------
+Register (/register)
+------------------------------------------------------------
+"← Back to home" goes to /.
+Fields: first name, last name, Gmail (must end with @gmail.com),
+Philippine mobile (09XXXXXXXXX or +639XXXXXXXXX), password, confirm
+password, account type (Prospective Tenant or Property Owner / Manager).
+After submit, the card switches to a 6-digit code. Resend code is there.
+Tenant becomes active after the code. Owner stays pending until an admin
+reviews their documents. Admin role cannot be chosen here.
+
+------------------------------------------------------------
+Listing detail (/listings/:id)
+------------------------------------------------------------
+Back button on the left (browser history), plus a "Back to home" link.
+Photo area. A "360° Tour" label is shown, but it does not open a tour.
+Verified-owner badge on the hero and next to the owner name.
+Map pin for this listing.
+Reserve form for a signed-in tenant: occupants, move-in, notes.
+The listing stays Available until the owner approves AND the one-month
+down payment is confirmed. "Pay down payment" calls PayMongo checkout.
+Without PayMongo keys this returns 503.
+Owner ratings (1-5) and comments. A tenant can submit one only after a
+confirmed reservation for that listing.
+Favorite heart for tenants.
+
+------------------------------------------------------------
+Tenant dashboard (/tenant)
+------------------------------------------------------------
+Sidebar (labels appear when the sidebar is hovered or expanded):
+- Discover: search text plus filters for type, price, capacity. Results
+  and a Calapan map. Each card can be saved or added to compare.
+  Compare holds two listings, then opens /compare.
+- Saved: favorites.
+- History: listings the tenant opened.
+- Notifications: empty shell. Text says the notification system is not live.
+- Account: profile summary from localStorage, not a full edit-profile form.
+- Explore: shortcuts by room type (Private room, Studio, and so on).
+- Log out.
+
+------------------------------------------------------------
+Owner dashboard (/owner)
+------------------------------------------------------------
+Sidebar:
+- My listings, plus filters: Verified, Pending review, Available, Occupied.
+- Reservations: approve or disapprove a request. Disapprove needs a comment.
+  Approve does NOT take the listing off the market. It waits for payment.
+- Viewing requests: empty shell. "once that feature is enabled."
+- Notifications: empty shell.
+- Account: name, email, verification status, and the verification form.
+- Log out.
+
+New listing form (button "+ New listing"):
+- Title, type (Private room, Studio unit, 1BR, 2BR, Bedspace)
+- Barangay dropdown of Calapan barangays (not a typed name)
+- Monthly price, capacity
+- Map: choosing a barangay centers the map. Click to place the pin.
+  The map cannot be dragged outside the Calapan bounding box.
+  A click outside that box is rejected with a message.
+  A dashed rectangle shows the box.
+- Description, amenities (comma-separated), house rules (comma-separated)
+- Photo URL (http or https). There is no file upload.
+  On-screen text says file uploads and 360 uploads are a future update.
+There is no Edit and no Delete button on an existing listing, even though
+the API has PUT /listings/:id.
+
+A pending owner can still create listings. Those listings stay hidden from
+the public until an admin verifies the owner and approves the listing.
+If an admin disapproves a listing, the owner sees the comment.
+
+------------------------------------------------------------
+Admin dashboard (/admin)
+------------------------------------------------------------
+Sidebar:
+- Overview: counts and shortcuts.
+- Owner verification: list of owners, open documents, approve / reject /
+  ask for revision / suspend, with a note.
+- Listing approvals: approve, or disapprove with a required comment.
+- Reports: user, listing, reservation, and payment totals; listings by type
+  and barangay; stale listings.
+- Audit log: filter by search text, target type (owner, listing, user),
+  and date range.
+- Users: add user, edit name/email/phone/role, optional password reset
+  (requires the admin's own password), deactivate, activate, archive,
+  restore.
+- Account: the signed-in admin.
+- Log out.
+
+There is one admin role. There is no separate super-admin role. The seed
+admin uses admin@renta.local, which is allowed only for the admin role.
+Tenant and owner emails must be Gmail.
+
+------------------------------------------------------------
+Compare (/compare)
+------------------------------------------------------------
+Two listing columns for the tenant. Photo area can be an empty placeholder
+if there is no image.
+
+============================================================
+3. What was added on top of the original GitHub app
+============================================================
+
+Original repo: https://github.com/nonaxkidd/RENTA (commit 4da227d is the
+"before" copy).
+
+Added:
+- Disapproval comment required when an admin removes a listing approval.
+  The owner can read it (listing.reviewNote).
+- Owner verification: Gmail OTP, then ID link + proof-of-authority link,
+  then admin review with a note. Document links are encrypted at rest
+  (AES-256-GCM, prefix enc:v1:). Owner and admin can read them decrypted.
+- Verified-owner badge on the landing cards and the listing page.
+- Gmail format and PH mobile format on public register and on admin-created
+  tenant/owner users.
+- Registration OTP. Login is blocked while emailVerified is false.
+  Old records with emailVerified missing can still log in. The schema
+  default is true so the seed admin keeps working. Public register sets
+  false explicitly.
+- OTP is 6 digits, hashed with SHA-256 plus the JWT secret, 10 minutes,
+  5 attempts, 60 second resend. If Gmail is not configured and
+  OTP_LOG_CODE=true, the code is printed in the API console only. It is
+  not returned by the API.
+- Listing photo URL required.
+- Barangay dropdown plus click-to-pin map. The saved lat/lng is the pin,
+  not a typed coordinate. Server rejects a barangay not in the list and
+  a pin outside the Calapan box.
+- Reserve, then owner decision, then PayMongo checkout for one month of
+  rent (centavos). Listing.available becomes false only after payment is
+  confirmed (webhook or POST /payments/sync). A later paid reservation
+  for the same listing becomes needs_refund.
+- Owner rating and comment, only after a confirmed reservation.
+- Admin user create, edit, deactivate, activate, archive, restore,
+  password reset. Passwords are bcrypt.
+- Audit log includes user actions and is filterable under Reports / Audit.
+- Back control on listing detail (left) and on login and register (home).
+- PWA manifest, icons, and service worker on the updated client only.
+
+Still only in the original "before" site (5174), on purpose:
+- Free-text barangay and "Approximate latitude / longitude" number boxes.
+- No OTP, no payments, no reviews, no user admin tools, no PWA.
+
+============================================================
+4. API map (all under /api/v1)
+============================================================
+
+Auth
+- POST /auth/register
+- POST /auth/login
+- POST /auth/verify-otp
+- POST /auth/resend-otp
+
+Listings
+- GET  /listings                     public, available only, max 20, hides reviewNote
+- GET  /listings/barangays           Calapan names
+- GET  /listings/barangay-center?name=   Nominatim lookup to center the map
+- GET  /listings/mine                owner
+- GET  /listings/:id                 public, hides reviewNote
+- POST /listings                     owner. Needs barangay from the list, lat, lng inside Calapan, photo URL.
+- PUT  /listings/:id                 owner. No delete route.
+
+Favorites, history
+- GET/POST/DELETE /favorites and /favorites/:listingId   tenant
+- GET /history, POST /history/:listingId                 tenant
+
+Verification
+- GET  /verification/me              owner
+- POST /verification                 owner, encrypts the two document URLs
+
+Reservations
+- POST /reservations/listings/:listingId     tenant
+- GET  /reservations/mine                    tenant
+- PATCH /reservations/:id/cancel             tenant
+- GET  /reservations/owner                   owner
+- PATCH /reservations/:id/decision           owner. Reject needs a comment.
+
+Reviews
+- GET  /reviews/listing/:listingId
+- POST /reviews/listing/:listingId           tenant, confirmed reservation required
+
+Payments
+- POST /payments/checkout            tenant, PayMongo. 503 if no secret key.
+- POST /payments/sync                tenant, after return from PayMongo
+- POST /payments/webhook             raw body, PayMongo signature. Registered BEFORE express.json.
+
+Admin (all require admin JWT)
+- GET   /admin/stats
+- GET   /admin/owners
+- PATCH /admin/owners/:id/review
+- GET   /admin/listings
+- PATCH /admin/listings/:id/review     note required when taking approval away
+- GET   /admin/users
+- POST  /admin/users
+- PATCH /admin/users/:id
+- PATCH /admin/users/:id/status        deactivate, activate, archive, restore
+- PATCH /admin/users/:id/password
+- GET   /admin/reports
+- GET   /admin/audit                   search, targetType, from, to
+
+Health: GET / and GET /api/v1/health
+
+============================================================
+5. Data the models care about
+============================================================
+
+User: firstName, lastName, email, phone, passwordHash, role
+(tenant | owner | admin), status (pending, active, suspended, rejected,
+archived, and related), emailVerified (default true), verification
+subdocument (document URLs, review note), statusBeforeDeactivation,
+statusBeforeArchive, archivedAt.
+
+Listing: title, type, barangay, price, lat, lng, description, amenities,
+houseRules, capacity, ownerName, ownerId, imageUrl, verified, available,
+reviewNote, reviewedAt, transparency.
+
+Reservation: listing, tenant, occupants, move-in, notes, queue status
+(queued, payment_pending, confirmed, rejected, expired, cancelled,
+conflict), downPaymentAmount.
+
+Payment: pending, paid, cancelled, needs_refund.
+EmailOtp: hashed code, expiry, attempts.
+OwnerReview: unique per listingId + tenantId.
+AuditLog: targetType owner | listing | user.
+
+============================================================
+6. Map and barangay rules
+============================================================
+
+Dropdown list is the usual 62 Calapan barangays plus San Rafael, which the
+city site lists. Names are stored in canonical form (example: "Ilaya",
+"Puting Tubig", "Sta. Cruz", "Sto. Niño"). Older seed text such as
+"Brgy. Bayanan" does not match the dropdown and will fail if sent as an
+update.
+
+The allowed box is the OpenStreetMap bounding box, same numbers on the
+client and the server:
+- south 13.274538, north 13.439555
+- west 121.096809, east 121.275097
+
+This is a rectangle, not the real city polygon. A point inside the box but
+outside the true city border (a bit of a neighboring town, or water) can
+still be saved. A real house on the border can be rejected if it falls
+just outside the box.
+
+Choosing a barangay calls Nominatim
+("name, Calapan City, Oriental Mindoro, Philippines") to drop the first pin.
+The user can click to move it. Nominatim can be slow, rate-limited, or
+down. If it fails, the user can still click the map.
+User-Agent used: RENTA-Calapan/1.0.
+
+============================================================
+7. UI that is still missing or only a shell
+============================================================
+
+Ask a reviewer to treat these as open, not as bugs in finished work:
+
+- Landing search does nothing.
+- 360° tour is a label and marketing copy. There is no viewer and no upload.
+- Photo is a pasted URL, not an uploaded file.
+- Owner cannot edit or delete a listing in the UI. Update API exists.
+  Delete API does not.
+- Owner "Viewing requests" is a coming-soon panel. No viewing model.
+- Owner and tenant Notifications are empty panels. No notification model,
+  no email except the registration OTP.
+- Tenant account screen does not edit the profile. No self-service
+  password change. No forgot-password email.
+- No in-app chat between tenant and owner.
+- No real-time updates. Reservation and approval changes appear on refresh.
+- Public listing list is capped at 20 and only returns available:true.
+  Pending and disapproved listings are hidden from tenants, which is
+  intended, but there is no pagination.
+- Compare needs exactly two saved compare items.
+- Admin cannot edit a listing's text or pin, only approve or disapprove.
+- No separate super-admin. One admin can deactivate another admin if the
+  API allows it. Worth checking.
+- No receipt, no refund action for needs_refund, no payout to the owner.
+- No tests in the repo for these flows.
+
+============================================================
+8. Problems you can hit while running or deploying
+============================================================
+
+Database
+- Atlas connection string works only after the current public IP is added
+  in Atlas Network Access, or access from anywhere is allowed.
+  Last seen public IP during setup was 123.253.51.216 and it was blocked.
+  The error looks like ReplicaSetNoPrimary / IP not whitelisted.
+- This PC's DNS refuses MongoDB SRV lookups (querySrv ECONNREFUSED).
+  server/src/config/db.ts sets DNS to 8.8.8.8 and 1.1.1.1 before connect.
+  If that file is reverted, Atlas will fail before the IP check.
+- If MongoDB is down, the API calls process.exit(1). The browser then
+  shows net::ERR_CONNECTION_REFUSED on login. That is a dead API, not a
+  wrong password.
+- The in-memory database on port 27018 is empty of real users. Restarting
+  localMongo.ts wipes listings and accounts. Seed again with
+  server/src/scripts/seedLocalUsers.ts.
+- .env is gitignored. Do not commit it. Do not paste the Atlas password
+  into a review.
+
+Email and payments
+- GMAIL_USER and GMAIL_APP_PASSWORD are empty. OTP only shows in the API
+  terminal while OTP_LOG_CODE=true. Turn that off before any public host.
+- PayMongo secret and webhook secret are empty. "Pay down payment" fails
+  with a service-unavailable message until test keys are set.
+- PayMongo success return uses CLIENT_ORIGIN plus ?reservation=. The
+  listing page then calls POST /payments/sync. If the webhook secret is
+  wrong, sync is the backup. If both fail, the listing stays available
+  even after the tenant paid.
+
+Map and geocoding
+- Barangay centering depends on the public Nominatim service. No API key,
+  about one request at a time, and it can 429 or time out (8 seconds).
+- The pin box is rectangular. See section 6.
+
+Security and school-demo limits
+- CORS is open (cors() with no origin lock), even though CLIENT_ORIGIN
+  exists for PayMongo return URLs.
+- Document encryption key falls back to JWT_SECRET if
+  DOCUMENT_ENCRYPTION_KEY is empty. Rotating the JWT secret would make
+  old document links unreadable.
+- JWT is in localStorage, so any XSS can steal the session.
+- Photo URLs and verification document URLs are links, not files stored
+  by RENTA. A link can rot or point at a private file the admin cannot open.
+- There is no rate limit on login or OTP besides the OTP attempt counter.
+- Health endpoint always says database "connected" without checking.
+
+Client
+- Two copies on 5173 and 5174 confuse testing. Latitude boxes exist only
+  on 5174. The new map is only on 5173.
+- Sidebar labels are hidden until the bar is expanded. On a narrow window
+  the icons are easy to miss.
+- PWA in dev registers a service worker. A stale worker can serve an old
+  shell after a code change. Hard refresh, or unregister the worker.
+- Installing on a phone will not work from http://127.0.0.1. It needs a
+  public HTTPS host.
+- Leaflet default marker images are not used. Pins are custom div icons.
+  If a new map uses the default marker, the icon can be invisible.
+
+Server / tooling
+- PowerShell on this machine does not accept &&. Use a semicolon.
+- Client typecheck must be:
+  node .\node_modules\typescript\bin\tsc -b
+  from the client folder. "npx tsc" once installed the wrong package.
+- Server typecheck: npx tsc --noEmit from the server folder.
+- Express 5 route params can be string or string[]. Review routes use a
+  helper. Other controllers still pass req.params.id through. A bad id
+  should 404, but it is a place to check.
+- npm allowScripts blocked the mongodb-memory-server postinstall. The
+  binary still downloaded on first MongoMemoryServer.create(). A new
+  machine may need that download again (hundreds of MB).
+
+Product rules that are easy to misread
+- A listing does not leave Available when the tenant clicks Reserve, or
+  when the owner approves. It leaves Available only after the down payment
+  is confirmed. The first confirmed payment wins.
+- An owner account is not "verified" just because Gmail OTP succeeded.
+  OTP proves the email. Admin document review sets the owner status.
+  Listing.verified is a second flag set when the listing is approved.
+- A rating cannot be posted before a confirmed (paid) reservation.
+
+============================================================
+9. Suggested prompt for Claude
+============================================================
+
+Paste this file and ask:
+
+"Read this RENTA brief. Do not rewrite the app. List (1) UI that is
+promised on screen but not actually implemented, (2) missing school-demo
+features that would make the three roles complete, (3) bugs or deploy
+problems I should fix before a panel, ordered by severity. For each item
+say which page or API it touches and whether it is already marked as a
+known gap in section 7 or 8. Do not invent screens that are not in this
+brief unless you mark them as suggestions."
+
+============================================================
+10. Files worth opening first
+============================================================
+
+Client
+- client/src/App.tsx                         routes
+- client/src/pages/Landing.tsx
+- client/src/pages/Login.tsx
+- client/src/pages/Register.tsx
+- client/src/pages/ListingDetail.tsx
+- client/src/pages/TenantDashboard.tsx
+- client/src/pages/OwnerDashboard.tsx
+- client/src/pages/AdminDashboard.tsx
+- client/src/pages/ComparePage.tsx
+- client/src/components/BarangayPinMap.tsx
+- client/src/components/OwnerVerificationPanel.tsx
+- client/src/services/api.ts
+- client/vite.config.ts                      PWA
+
+Server
+- server/src/server.ts
+- server/src/config/db.ts
+- server/src/routes/*.ts
+- server/src/controllers/authControllers.ts
+- server/src/controllers/listingController.ts
+- server/src/controllers/reservationController.ts
+- server/src/controllers/paymentController.ts
+- server/src/controllers/adminController.ts
+- server/src/controllers/verificationController.ts
+- server/src/controllers/reviewController.ts
+- server/src/data/calapanBarangays.ts
+- server/src/utils/cryptoDocs.ts
+- server/src/utils/contact.ts
+- server/.env.example                        keys, no secrets

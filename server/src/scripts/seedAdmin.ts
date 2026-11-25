@@ -35,10 +35,26 @@ async function seedAdmin() {
       passwordHash,
       defaultRole: "admin",
       status: "active",
+      emailVerified: true,
     });
 
     console.log("Admin account created successfully!");
     console.log(`Email: ${adminEmail}`);
+
+    const superEmail = "superadmin@renta.local";
+    const existingSuper = await User.findOne({ email: superEmail });
+    if (!existingSuper) {
+      await User.create({
+        firstName: "RENTA",
+        lastName: "Superadmin",
+        email: superEmail,
+        passwordHash: await bcrypt.hash("SuperAdmin12345!", 12),
+        defaultRole: "superadmin",
+        status: "active",
+        emailVerified: true,
+      });
+      console.log(`Superadmin created: ${superEmail}`);
+    }
   } catch (error) {
     console.error("Admin creation failed:", error);
   } finally {

@@ -157,6 +157,19 @@
   max-width: 430px;
 }
 
+.auth-back {
+  display: inline-flex;
+  margin-bottom: 22px;
+  color: #102a32;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.auth-back:hover {
+  color: #1f6b4a;
+}
+
 
 /* Hide mobile logo on desktop */
 

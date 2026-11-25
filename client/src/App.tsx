@@ -12,6 +12,7 @@ import ComparePage from "./pages/ComparePage";
 import TenantDashboard from "./pages/TenantDashboard";
 import OwnerDashboard from "./pages/OwnerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import MockPayment from "./pages/MockPayment";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -71,6 +72,15 @@ function App() {
           element={
             <ProtectedRoute allowedRole="admin">
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/pay/mock/:paymentId"
+          element={
+            <ProtectedRoute allowedRole="tenant">
+              <MockPayment />
             </ProtectedRoute>
           }
         />

@@ -16,8 +16,9 @@
 
 .detail-nav {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  gap: 28px;
   padding: 24px 5vw;
   background: var(--renta-navy);
 }
@@ -127,6 +128,45 @@
   background: transparent;
   cursor: pointer;
   font-family: inherit;
+  margin-right: 4px;
+}
+
+.detail-owner-badge {
+  margin-left: 8px;
+}
+
+.detail-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.detail-form input,
+.detail-form textarea,
+.detail-form select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  border: 1px solid #d7d3c6;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.detail-submit {
+  justify-self: start;
+  background: var(--renta-navy);
+  color: var(--renta-cream);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.detail-review {
+  padding: 10px 0;
+  border-top: 1px solid #e6e2d6;
 }
 
 .detail-split {

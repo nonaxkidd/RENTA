@@ -1,11 +1,13 @@
 import { Request, Response } from "express";
 import { User } from "../models/User";
+import { requireObjectId } from "../utils/params";
 
 const MAX_HISTORY_ENTRIES = 50;
 
 export async function recordView(req: Request, res: Response) {
   try {
-    const { listingId } = req.params;
+    const listingId = requireObjectId(req, res, "listingId");
+    if (!listingId) return;
 
     const user = await User.findById(req.auth?.userId);
     if (!user) {

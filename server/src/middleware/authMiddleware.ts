@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { User } from "../models/User";
 
-type UserRole = "tenant" | "owner" | "admin";
+type UserRole = "tenant" | "owner" | "admin" | "superadmin";
 
 interface TokenPayload {
   userId: string;
@@ -17,7 +18,7 @@ declare global {
   }
 }
 
-export function authenticate(
+export async function authenticate(
   req: Request,
   res: Response,
   next: NextFunction
@@ -44,7 +45,20 @@ export function authenticate(
       secret
     ) as TokenPayload;
 
-    req.auth = payload;
+    const user = await User.findById(payload.userId).select("defaultRole status");
+    if (!user) {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    if (user.status === "suspended" || user.status === "archived" || user.status === "rejected") {
+      return res.status(403).json({ message: "Account is not allowed to log in", code: "ACCOUNT_BLOCKED" });
+    }
+
+    req.auth = {
+      userId: user._id.toString(),
+      role: user.defaultRole,
+      status: user.status,
+    };
 
     next();
   } catch {
@@ -66,7 +80,10 @@ export function requireRole(...roles: UserRole[]) {
       });
     }
 
-    if (!roles.includes(req.auth.role)) {
+    const role = req.auth.role;
+    const allowed = roles.includes(role) || (role === "superadmin" && roles.includes("admin"));
+
+    if (!allowed) {
       return res.status(403).json({
         message: "You do not have permission",
       });
