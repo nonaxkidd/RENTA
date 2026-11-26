@@ -17,6 +17,7 @@ export interface IListing extends Document {
   ownerName: string;
   ownerId?: mongoose.Types.ObjectId;
   imageUrl?: string;
+  panoramaUrl?: string;
   reviewNote?: string;
   reviewedAt?: Date;
   archivedAt?: Date;
@@ -40,6 +41,7 @@ const listingSchema = new Schema<IListing>(
     ownerName: { type: String, required: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     imageUrl: { type: String },
+    panoramaUrl: { type: String },
     reviewNote: { type: String, maxlength: 500 },
     reviewedAt: { type: Date },
     archivedAt: { type: Date },

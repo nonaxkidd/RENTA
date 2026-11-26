@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
+import { LockToCalapan } from "../components/BarangayPinMap";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../services/api";
+import PanoramaTour from "../components/PanoramaTour";
 import "./ListingDetail.css";
 
 interface ListingData {
@@ -24,6 +26,7 @@ interface ListingData {
   available: boolean;
   ownerName: string;
   imageUrl?: string;
+  panoramaUrl?: string;
 }
 
 interface RentaUser {
@@ -81,6 +84,16 @@ function ListingDetail() {
   const [reserveNotes, setReserveNotes] = useState("");
   const [reserveMessage, setReserveMessage] = useState("");
   const [myReservation, setMyReservation] = useState<{ _id: string; queueStatus: string; ownerResponse?: string } | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  useEffect(() => {
+    if (!tourOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setTourOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tourOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,8 +279,11 @@ function ListingDetail() {
       <div
         className="detail-hero"
         style={listing.imageUrl ? { backgroundImage: `url(${listing.imageUrl})` } : undefined}>
+        <PanoramaTour lat={listing.lat} lng={listing.lng} />
         {listing.verified && <span className="detail-verified-badge">Verified owner</span>}
-        <span className="detail-tour-badge">Photos</span>
+        <button type="button" className="detail-tour-badge detail-tour-trigger" onClick={() => setTourOpen(true)}>
+          Street View
+        </button>
 
         {isTenant && (
           <button
@@ -432,6 +448,8 @@ function ListingDetail() {
             <MapContainer
               center={[listing.lat, listing.lng]}
               zoom={15}
+              minZoom={13}
+              maxZoom={18}
               scrollWheelZoom={false}
               style={{ height: "420px", width: "100%", borderRadius: "20px" }}
             >
@@ -439,6 +457,7 @@ function ListingDetail() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
+              <LockToCalapan />
               <Marker
                 position={[listing.lat, listing.lng]}
                 icon={createPriceIcon(`₱${(listing.price / 1000).toFixed(1)}K`)}
@@ -450,6 +469,18 @@ function ListingDetail() {
           </p>
         </div>
       </div>
+
+      {tourOpen && (
+        <div className="tour-modal-overlay" onClick={() => setTourOpen(false)}>
+          <div className="tour-modal" role="dialog" aria-label="Google Street View" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="tour-modal-close" onClick={() => setTourOpen(false)} aria-label="Close tour">
+              ×
+            </button>
+            <PanoramaTour lat={listing.lat} lng={listing.lng} />
+            <p className="tour-modal-note">Google Street View near this pin in Calapan City. Drag to look around.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

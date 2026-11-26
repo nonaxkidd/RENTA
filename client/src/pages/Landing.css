@@ -325,12 +325,14 @@ a.listing-card {
   height: 180px;
   background: linear-gradient(135deg, #2a3f2f, #1a2a22);
   position: relative;
+  overflow: hidden;
 }
 
 .tour-badge {
   position: absolute;
-  top: 14px;
+  bottom: 14px;
   left: 14px;
+  z-index: 1;
   background: var(--renta-lime);
   color: var(--renta-navy);
   font-size: 11px;
@@ -569,8 +571,6 @@ a.listing-card {
 
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; }
-  .listing-card { flex: 0 0 calc(100% - 16px); }
-  .carousel-track { transform: none !important; overflow-x: auto; }
   .owner-cta { flex-direction: column; align-items: flex-start; }
   .landing-footer { flex-direction: column; gap: 8px; }
 }

@@ -15,6 +15,12 @@ function readCoordinate(value: unknown): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
+function readPanoramaUrl(value: unknown): { ok: true; url: string } | { ok: false } {
+  if (value === undefined || value === null || value === "") return { ok: true, url: "" };
+  if (!isSafeHttpUrl(value)) return { ok: false };
+  return { ok: true, url: value };
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -130,6 +136,7 @@ export async function createListing(req: Request, res: Response) {
       capacity,
       ownerName,
       imageUrl,
+      panoramaUrl,
     } = req.body;
     const barangay = canonicalBarangay(req.body.barangay);
     const lat = readCoordinate(req.body.lat);
@@ -141,6 +148,11 @@ export async function createListing(req: Request, res: Response) {
 
     if (!isSafeHttpUrl(imageUrl)) {
       return res.status(400).json({ message: "A photo link (http or https) is required." });
+    }
+
+    const panorama = readPanoramaUrl(panoramaUrl);
+    if (!panorama.ok) {
+      return res.status(400).json({ message: "The 360° photo link must start with http or https." });
     }
 
     if (lat == null || lng == null || !isInsideCalapan(lat, lng)) {
@@ -161,6 +173,7 @@ export async function createListing(req: Request, res: Response) {
       ownerName,
       ownerId: req.auth?.userId,
       imageUrl,
+      panoramaUrl: panorama.url || undefined,
       verified: false,
       available: true,
       transparency: 0,
@@ -213,7 +226,12 @@ export async function updateListing(req: Request, res: Response) {
     const barangayChanged = Boolean(nextBarangay && nextBarangay !== listing.barangay);
     const pinChanged = nextLat != null && nextLng != null && (nextLat !== listing.lat || nextLng !== listing.lng);
     const photoChanged = req.body.imageUrl !== undefined && req.body.imageUrl !== listing.imageUrl;
-    const returnToReview = listing.verified && (priceChanged || titleChanged || descriptionChanged || barangayChanged || pinChanged || photoChanged);
+    const panorama = readPanoramaUrl(req.body.panoramaUrl);
+    if (!panorama.ok) {
+      return res.status(400).json({ message: "The 360° photo link must start with http or https." });
+    }
+    const panoramaChanged = req.body.panoramaUrl !== undefined && panorama.url !== (listing.panoramaUrl ?? "");
+    const returnToReview = listing.verified && (priceChanged || titleChanged || descriptionChanged || barangayChanged || pinChanged || photoChanged || panoramaChanged);
 
     if (nextBarangay) listing.barangay = nextBarangay;
     if (nextLat != null && nextLng != null) {
@@ -225,6 +243,10 @@ export async function updateListing(req: Request, res: Response) {
       if (req.body[field] !== undefined) {
         (listing as any)[field] = req.body[field];
       }
+    }
+
+    if (req.body.panoramaUrl !== undefined) {
+      listing.panoramaUrl = panorama.url || undefined;
     }
 
     if (returnToReview) {
@@ -251,7 +273,7 @@ export async function updateListing(req: Request, res: Response) {
     res.json({
       listing,
       message: returnToReview
-        ? "Saved. Title, description, price, location, or photo changes send an approved listing back to pending review."
+        ? "Saved. Title, description, price, location, photo, or 360° photo changes send an approved listing back to pending review."
         : "Listing updated.",
     });
   } catch (error) {

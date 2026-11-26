@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { MapContainer, TileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import { LockToCalapan } from "../components/BarangayPinMap";
+import PanoramaTour from "../components/PanoramaTour";
 import api from "../services/api";
 import "./Landing.css";
 
@@ -14,6 +16,7 @@ interface ApiListing {
   transparency: number;
   verified: boolean;
   imageUrl?: string;
+  panoramaUrl?: string;
   lat: number;
   lng: number;
   updatedAt: string;
@@ -30,7 +33,6 @@ function formatRelativeTime(dateString: string) {
 }
 
 function Landing() {
-  const CARDS_PER_VIEW = 3;
   const GAP = 24; // must match .carousel-track gap in Landing.css
 
   const [listings, setListings] = useState<ApiListing[]>([]);
@@ -39,13 +41,12 @@ function Landing() {
   const [carouselLoading, setCarouselLoading] = useState(true);
   const [listingsError, setListingsError] = useState("");
 
-  const [index, setIndex] = useState(CARDS_PER_VIEW);
+  const [cardsPerView, setCardsPerView] = useState(3);
+  const [index, setIndex] = useState(3);
   const [paused, setPaused] = useState(false);
   const [transition, setTransition] = useState(true);
   const [cardStep, setCardStep] = useState(0);
   const [mapLoading, setMapLoading] = useState(true);
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
-
   const viewportRef = useRef<HTMLDivElement>(null);
 
   const shownListings = listings;
@@ -56,22 +57,18 @@ function Landing() {
   const extendedListings =
     shownListings.length > 0
       ? [
-          ...shownListings.slice(-CARDS_PER_VIEW),
+          ...shownListings.slice(-cardsPerView),
           ...shownListings,
-          ...shownListings.slice(0, CARDS_PER_VIEW),
+          ...shownListings.slice(0, cardsPerView),
         ]
       : [];
 
   const next = () => setIndex((i) => i + 1);
   const prev = () => setIndex((i) => i - 1);
 
-  function handleListingClick(event: React.MouseEvent) {
-    // Landing always shows the sign-in prompt on listing clicks, even if
-    // the user is already logged in — this keeps Landing a pure entry
-    // point and avoids "Back to listings" ever needing to return here.
-    event.preventDefault();
-    setShowAuthPrompt(true);
-  }
+  useEffect(() => {
+    setIndex(cardsPerView);
+  }, [cardsPerView]);
 
   // Fetch real listings from MongoDB via the backend
   useEffect(() => {
@@ -110,7 +107,9 @@ function Landing() {
     const measure = () => {
       const viewportWidth = element.offsetWidth;
       if (viewportWidth === 0) return;
-      const cardWidth = (viewportWidth - GAP * (CARDS_PER_VIEW - 1)) / CARDS_PER_VIEW;
+      const perView = viewportWidth < 900 ? 1 : 3;
+      setCardsPerView(perView);
+      const cardWidth = (viewportWidth - GAP * (perView - 1)) / perView;
       setCardStep(cardWidth + GAP);
     };
 
@@ -131,21 +130,21 @@ function Landing() {
   // Silently snap back when we scroll onto a clone, so the loop feels seamless
   useEffect(() => {
     if (listings.length === 0) return;
-    if (index === CARDS_PER_VIEW + listings.length) {
+    if (index === cardsPerView + listings.length) {
       const timeout = setTimeout(() => {
         setTransition(false);
-        setIndex(CARDS_PER_VIEW);
+        setIndex(cardsPerView);
       }, 500);
       return () => clearTimeout(timeout);
     }
-    if (index === CARDS_PER_VIEW - 1) {
+    if (index === cardsPerView - 1) {
       const timeout = setTimeout(() => {
         setTransition(false);
-        setIndex(CARDS_PER_VIEW + listings.length - 1);
+        setIndex(cardsPerView + listings.length - 1);
       }, 500);
       return () => clearTimeout(timeout);
     }
-  }, [index, listings]);
+  }, [index, listings, cardsPerView]);
 
   useEffect(() => {
     if (!transition) {
@@ -157,7 +156,7 @@ function Landing() {
 
   const realIndex =
     listings.length > 0
-      ? ((index - CARDS_PER_VIEW) % listings.length + listings.length) % listings.length
+      ? ((index - cardsPerView) % listings.length + listings.length) % listings.length
       : 0;
 
   return (
@@ -195,7 +194,7 @@ function Landing() {
             locations, and photos.
           </p>
 
-          <form className="hero-search" onSubmit={(event) => { event.preventDefault(); setSearchQuery(searchText); setIndex(CARDS_PER_VIEW); }}>
+          <form className="hero-search" onSubmit={(event) => { event.preventDefault(); setSearchQuery(searchText); setIndex(cardsPerView); }}>
             <input type="text" placeholder="Search title, barangay, or type" value={searchText} onChange={(event) => setSearchText(event.target.value)} />
             <button type="submit">
               Explore rentals <span className="button-arrow">↗</span>
@@ -217,7 +216,9 @@ function Landing() {
           )}
           <MapContainer
             center={CALAPAN_CENTER}
-            zoom={13}
+            zoom={14}
+            minZoom={13}
+            maxZoom={18}
             scrollWheelZoom={true}
             style={{ height: "460px", width: "100%", borderRadius: "24px" }}
           >
@@ -226,6 +227,7 @@ function Landing() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               eventHandlers={{ load: () => setMapLoading(false) }}
             />
+            <LockToCalapan />
           </MapContainer>
         </div>
       </section>
@@ -277,13 +279,10 @@ function Landing() {
                   className="listing-card"
                   key={`${listing._id}-${i}`}
                   style={{ width: cardStep - GAP }}
-                  onClick={handleListingClick}
                 >
-                  <div
-                    className="listing-thumb"
-                    style={listing.imageUrl ? { backgroundImage: `url(${listing.imageUrl})`, backgroundSize: "cover" } : undefined}
-                  >
-                    <span className="tour-badge">Photos</span>
+                  <div className="listing-thumb">
+                    <PanoramaTour lat={listing.lat} lng={listing.lng} interactive={false} />
+                    <span className="tour-badge">Street View</span>
                     {listing.verified && <span className="verified-pill">Verified owner</span>}
                   </div>
                   <div className="listing-info">
@@ -309,7 +308,7 @@ function Landing() {
               <button
                 key={listing._id}
                 className={i === realIndex ? "dot active" : "dot"}
-                onClick={() => setIndex(i + CARDS_PER_VIEW)}
+                onClick={() => setIndex(i + cardsPerView)}
                 aria-label={`Go to listing ${i + 1}`}
               />
             ))}
@@ -339,22 +338,6 @@ function Landing() {
         <span>© {new Date().getFullYear()}</span>
       </footer>
 
-      {/* AUTH PROMPT MODAL */}
-      {showAuthPrompt && (
-        <div className="auth-modal-overlay" onClick={() => setShowAuthPrompt(false)}>
-          <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="auth-modal-close" onClick={() => setShowAuthPrompt(false)} aria-label="Close">
-              ×
-            </button>
-            <h3>Sign in to view this listing</h3>
-            <p>Create a free tenant account or sign in to see full accommodation details and request a viewing.</p>
-            <div className="auth-modal-actions">
-              <Link to="/login" className="auth-modal-btn primary">Sign in</Link>
-              <Link to="/register" className="auth-modal-btn secondary">Create account</Link>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

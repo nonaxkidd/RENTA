@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -8,11 +8,21 @@ import "./Login.css";
 
 type Mode = "login" | "verify" | "forgot" | "reset";
 
+const demoLogins = import.meta.env.DEV
+  ? [
+      { label: "Tenant", email: "tenant@gmail.com", password: "Tenant12345!" },
+      { label: "Owner", email: "owner@gmail.com", password: "Owner12345!" },
+      { label: "Admin", email: "admin@renta.local", password: "Admin12345!" },
+      { label: "Superadmin", email: "superadmin@renta.local", password: "SuperAdmin12345!" },
+    ]
+  : [];
+
 function Login() {
   const navigate = useNavigate();
 
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [mode, setMode] = useState<Mode>("login");
@@ -38,11 +48,19 @@ function Login() {
     navigate(homeForRole(user.role));
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
+  function readTypedEmail() {
+    const typed = emailRef.current?.value ?? email;
+    return typed.trim();
+  }
+
+  async function signIn(emailAddress: string, secret: string) {
+    const submittedEmail = emailAddress.trim();
+    setEmail(submittedEmail);
+    if (emailRef.current) emailRef.current.value = submittedEmail;
+    if (passwordRef.current) passwordRef.current.value = secret;
     try {
       setMessage("");
-      const response = await api.post("/auth/login", { email, password });
+      const response = await api.post("/auth/login", { email: submittedEmail, password: secret });
       storeSession(response.data.token, response.data.user);
     } catch (error: any) {
       if (error.response?.data?.needsOtp) {
@@ -53,11 +71,21 @@ function Login() {
     }
   }
 
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const emailInput = form.elements.namedItem("email");
+    const passwordInput = form.elements.namedItem("password");
+    const submittedEmail = emailInput instanceof HTMLInputElement ? emailInput.value : "";
+    const submittedPassword = passwordInput instanceof HTMLInputElement ? passwordInput.value : "";
+    await signIn(submittedEmail, submittedPassword);
+  }
+
   async function handleVerifyOtp(event: FormEvent) {
     event.preventDefault();
     try {
       setMessage("");
-      const response = await api.post("/auth/verify-otp", { email: email.trim(), code: otpCode.trim() });
+      const response = await api.post("/auth/verify-otp", { email: readTypedEmail(), code: otpCode.trim() });
       storeSession(response.data.token, response.data.user);
     } catch (error: any) {
       setMessage(error.response?.data?.message || "That code could not be verified.");
@@ -68,7 +96,7 @@ function Login() {
     if (resendIn > 0) return;
     try {
       setMessage("");
-      const response = await api.post("/auth/resend-otp", { email: email.trim() });
+      const response = await api.post("/auth/resend-otp", { email: readTypedEmail() });
       setMessage(response.data.message || "A new code was sent.");
       setResendIn(60);
     } catch (error: any) {
@@ -80,7 +108,7 @@ function Login() {
     event.preventDefault();
     try {
       setMessage("");
-      const response = await api.post("/auth/forgot-password", { email: email.trim() });
+      const response = await api.post("/auth/forgot-password", { email: readTypedEmail() });
       setMessage(response.data.message);
       setMode("reset");
       setResendIn(60);
@@ -94,13 +122,12 @@ function Login() {
     try {
       setMessage("");
       const response = await api.post("/auth/reset-password", {
-        email: email.trim(),
+        email: readTypedEmail(),
         code: otpCode.trim(),
         password: newPassword,
       });
       setMessage(response.data.message);
       setMode("login");
-      setPassword("");
       setOtpCode("");
       setNewPassword("");
     } catch (error: any) {
@@ -111,7 +138,7 @@ function Login() {
   async function handleResendReset() {
     if (resendIn > 0) return;
     try {
-      const response = await api.post("/auth/forgot-password", { email: email.trim() });
+      const response = await api.post("/auth/forgot-password", { email: readTypedEmail() });
       setMessage(response.data.message);
       setResendIn(60);
     } catch (error: any) {
@@ -170,10 +197,15 @@ function Login() {
               <label htmlFor="email">Email</label>
               <input
                 id="email"
+                ref={emailRef}
+                name="email"
                 type="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder="you@example.com"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onInput={(event) => setEmail(event.currentTarget.value)}
                 required
               />
             </div>
@@ -188,10 +220,14 @@ function Login() {
                 </div>
                 <input
                   id="password"
+                  ref={passwordRef}
+                  name="password"
                   type="password"
+                  autoComplete="current-password"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
                   placeholder="Enter your password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
                   required
                 />
               </div>
@@ -229,6 +265,17 @@ function Login() {
               <span>{mode === "forgot" ? "Send code" : mode === "reset" ? "Save password" : mode === "verify" ? "Verify" : "Sign in"}</span>
               <span className="button-arrow">→</span>
             </button>
+
+            {mode === "login" && demoLogins.length > 0 && (
+              <div className="demo-logins">
+                <span>Demo</span>
+                {demoLogins.map((account) => (
+                  <button key={account.email} type="button" onClick={() => void signIn(account.email, account.password)}>
+                    {account.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </form>
 
           {(mode === "forgot" || mode === "reset" || mode === "verify") && (

@@ -9,9 +9,20 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("renta_token");
+  const url = String(config.url ?? "");
+  const authAttempt = [
+    "/auth/login",
+    "/auth/register",
+    "/auth/verify-otp",
+    "/auth/forgot-password",
+    "/auth/reset-password",
+    "/auth/resend-otp",
+  ].some((path) => url.includes(path));
 
-  if (token) {
+  if (token && !authAttempt) {
     config.headers.Authorization = `Bearer ${token}`;
+  } else if (config.headers) {
+    delete config.headers.Authorization;
   }
 
   if (typeof FormData !== "undefined" && config.data instanceof FormData) {

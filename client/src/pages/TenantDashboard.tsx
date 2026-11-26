@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Tooltip } from "react-leaflet";
+import { LockToCalapan } from "../components/BarangayPinMap";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import api from "../services/api";
@@ -30,6 +31,7 @@ interface ApiListing {
   capacity: number;
   lat: number;
   lng: number;
+  panoramaUrl?: string;
 }
 
 interface HistoryEntry {
@@ -460,7 +462,7 @@ function TenantDashboard() {
           className="bracket-listing-card"
         >
           <div className="bracket-listing-thumb">
-            <span className="bracket-tour-badge">Photos</span>
+            <span className="bracket-tour-badge">{listing.lat != null && listing.lng != null ? "Street View" : "Photos"}</span>
             {listing.verified && <span className="bracket-verified-tag">Verified</span>}
           </div>
           <div className="bracket-listing-info">
@@ -865,8 +867,9 @@ function TenantDashboard() {
 
                       <div className="map-container-wrap">
                         <span className="map-badge">Calapan City · Approximate map</span>
-                        <MapContainer center={CALAPAN_CENTER} zoom={13} scrollWheelZoom={true} style={{ height: "500px", width: "100%", borderRadius: "18px" }}>
+                        <MapContainer center={CALAPAN_CENTER} zoom={14} minZoom={13} maxZoom={18} scrollWheelZoom={true} style={{ height: "500px", width: "100%", borderRadius: "18px" }}>
                           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                          <LockToCalapan />
                           {filteredListings.map((listing) => (
                             <Marker key={listing._id} position={[listing.lat, listing.lng]} icon={createPinIcon(listing.verified)}>
                               <Tooltip direction="top" offset={[0, -34]} opacity={1} className="listing-tooltip">

@@ -305,6 +305,32 @@
 
 /* login button */
 
+.demo-logins {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.demo-logins span {
+  font-size: 12px;
+  color: #7a8b8f;
+}
+
+.demo-logins button {
+  border: 1px solid #d5dedf;
+  background: #fff;
+  color: #102a32;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.demo-logins button:hover {
+  border-color: #9ebc25;
+}
+
 .login-button {
   width: 100%;
 

@@ -25,6 +25,7 @@ interface OwnerListing {
   available: boolean;
   description: string;
   imageUrl?: string;
+  panoramaUrl?: string;
   reviewNote?: string;
   lat?: number;
   lng?: number;
@@ -162,6 +163,8 @@ function OwnerDashboard() {
   const [houseRulesText, setHouseRulesText] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [panoramaUrl, setPanoramaUrl] = useState("");
+  const [panoramaFile, setPanoramaFile] = useState<File | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const notifications = useNotificationFeed();
   const [submitting, setSubmitting] = useState(false);
@@ -263,6 +266,8 @@ function OwnerDashboard() {
     setHouseRulesText("");
     setImageUrl("");
     setPhotoFile(null);
+    setPanoramaUrl("");
+    setPanoramaFile(null);
     setEditingId(null);
     setFormMessage("");
   }
@@ -282,6 +287,8 @@ function OwnerDashboard() {
     setHouseRulesText((listing.houseRules ?? []).join(", "));
     setImageUrl(listing.imageUrl ?? "");
     setPhotoFile(null);
+    setPanoramaUrl(listing.panoramaUrl ?? "");
+    setPanoramaFile(null);
     setFormMessage("");
     setShowForm(true);
   }
@@ -324,6 +331,14 @@ function OwnerDashboard() {
         return;
       }
 
+      let panorama = panoramaUrl.trim();
+      if (panoramaFile) {
+        const body = new FormData();
+        body.append("photo", panoramaFile);
+        const uploaded = await api.post("/listings/photo", body, getAuthHeaders());
+        panorama = uploaded.data.imageUrl;
+      }
+
       const payload = {
           title,
           type,
@@ -337,6 +352,7 @@ function OwnerDashboard() {
           houseRules: houseRulesText.split(",").map((r) => r.trim()).filter(Boolean),
           ownerName: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
           imageUrl: photo,
+          panoramaUrl: panorama,
       };
       const response = editingId
         ? await api.put(`/listings/${editingId}`, payload, getAuthHeaders())
@@ -466,6 +482,18 @@ function OwnerDashboard() {
                 onChange={(e) => setImageUrl(e.target.value)}
                 placeholder="or paste a photo link"
               />
+            </div>
+
+            <div className="odash-form-group">
+              <label>360° photo (optional)</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setPanoramaFile(e.target.files?.[0] ?? null)} />
+              <input
+                type="url"
+                value={panoramaUrl}
+                onChange={(e) => setPanoramaUrl(e.target.value)}
+                placeholder="or paste a 360° photo link"
+              />
+              <p className="odash-hint">Use a full equirectangular JPEG, PNG, or WebP. Changing it on an approved listing sends the listing back for review.</p>
             </div>
 
             {formMessage && <p className="odash-form-message">{formMessage}</p>}

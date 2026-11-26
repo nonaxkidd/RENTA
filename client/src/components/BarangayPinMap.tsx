@@ -45,11 +45,24 @@ function MapClick({
   return null;
 }
 
-function KeepInsideCalapan() {
+export function LockToCalapan() {
   const map = useMap();
   useEffect(() => {
-    map.setMaxBounds(calapanBounds);
-    map.options.maxBoundsViscosity = 1;
+    const apply = () => {
+      if (map.getSize().x < 10 || map.getSize().y < 10) return;
+      map.setMaxBounds(calapanBounds);
+      map.options.maxBoundsViscosity = 1;
+      const minZoom = map.getBoundsZoom(calapanBounds, false);
+      if (Number.isFinite(minZoom)) {
+        map.setMinZoom(minZoom);
+        if (map.getZoom() < minZoom) map.setZoom(minZoom);
+      }
+    };
+    apply();
+    map.on("resize", apply);
+    return () => {
+      map.off("resize", apply);
+    };
   }, [map]);
   return null;
 }
@@ -95,7 +108,7 @@ function BarangayPinMap({
         bounds={CALAPAN_LIMIT}
         pathOptions={{ color: "#061f29", weight: 2, dashArray: "6 6", fill: false }}
       />
-      <KeepInsideCalapan />
+      <LockToCalapan />
       <MoveMap lat={viewLat} lng={viewLng} />
       <MapClick onPick={onPick} onOutside={onOutside} />
       {lat != null && lng != null && isInsideCalapan(lat, lng) && (

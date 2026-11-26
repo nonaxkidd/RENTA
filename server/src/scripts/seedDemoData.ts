@@ -94,6 +94,8 @@ async function main() {
   const listings = [];
   for (let index = 0; index < approved.length; index += 1) {
     const [title, type, barangay, price] = approved[index];
+    const lat = 13.4092 + index * 0.00036;
+    const lng = 121.1834 - index * 0.00055;
     let listing = await Listing.findOne({ title, ownerId: owner._id });
     if (!listing) {
       listing = await Listing.create({
@@ -103,8 +105,8 @@ async function main() {
         price,
         transparency: 80 + (index % 15),
         verified: true,
-        lat: 13.36 + index * 0.004,
-        lng: 121.16 + (index % 4) * 0.01,
+        lat,
+        lng,
         description: `${type} in ${barangay} for the local RENTA demo.`,
         amenities: ["Wi-Fi", "Shared kitchen"],
         houseRules: ["Quiet hours after 10 PM"],
@@ -115,8 +117,19 @@ async function main() {
         imageUrl: await placeholderUrl(),
         reviewedAt: new Date(),
       });
+    } else if (listing.lat !== lat || listing.lng !== lng) {
+      listing.lat = lat;
+      listing.lng = lng;
+      await listing.save();
     }
     listings.push(listing);
+  }
+
+  const samplePhotoIds = listings
+    .filter((listing) => listing.panoramaUrl || listing.imageUrl?.includes("/media/listings/"))
+    .map((listing) => listing._id);
+  if (samplePhotoIds.length > 0) {
+    await Listing.updateMany({ _id: { $in: samplePhotoIds } }, { $unset: { panoramaUrl: "", imageUrl: "" } });
   }
 
   let disapproved = await Listing.findOne({ title: "Demo · Disapproved room", ownerId: owner._id });

@@ -91,9 +91,23 @@ export async function register(req: Request, res: Response) {
   }
 }
 
+function cleanEmail(value: unknown) {
+  if (typeof value !== "string") return value;
+  return value.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, "").trim().toLowerCase();
+}
+
+function rejectLogin(res: Response, email: string, reason: "account" | "password") {
+  if (process.env.NODE_ENV !== "production") {
+    console.info(`Login rejected for ${email}: ${reason === "account" ? "no account" : "password"}`);
+  }
+  return res.status(401).json({
+    message: "Invalid email or password",
+  });
+}
+
 // login logic
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.preprocess(cleanEmail, z.string().email()),
   password: z.string().min(1),
 });
 
@@ -115,21 +129,18 @@ export async function login(req: Request, res: Response) {
     }).select("+passwordHash");
 
     if (!user) {
-      return res.status(401).json({
-        message: "Invalid email or password",
-      });
+      return rejectLogin(res, email, "account");
     }
 
     // Compare entered password with hashed password
-    const passwordMatches = await bcrypt.compare(
-      password,
-      user.passwordHash
-    );
+    const normalizedPassword = password.replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\u00A0/g, " ").trim();
+    let passwordMatches = await bcrypt.compare(password, user.passwordHash);
+    if (!passwordMatches && normalizedPassword !== password) {
+      passwordMatches = await bcrypt.compare(normalizedPassword, user.passwordHash);
+    }
 
     if (!passwordMatches) {
-      return res.status(401).json({
-        message: "Invalid email or password",
-      });
+      return rejectLogin(res, email, "password");
     }
 
     if (user.emailVerified === false) {

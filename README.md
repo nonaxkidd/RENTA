@@ -38,7 +38,7 @@ These accounts are for local demos only.
 - Repeat login or register quickly and confirm the rate-limit message.
 - Sign in as superadmin. Add an admin. Deactivate and restore an admin. A normal admin cannot deactivate, archive, or change the role of an admin, a superadmin, or their own account. The last active superadmin cannot be removed. Blocked attempts appear in the audit log.
 - As an owner, upload an ID and proof of authority (JPEG, PNG, WEBP, or PDF, 5 MB). Confirm an admin can open the file and the audit log records the view. Create a listing with a photo file or a photo URL.
-- On the landing page, search by title, barangay, and type. Listing pages say Photos and do not open a 360 tour.
+- On the landing page, search by title, barangay, and type. Open a listing and click Street View. The tour is Google Street View near that pin in Calapan City.
 - As a tenant, open **Reservations**, pay the down payment on the local mock page (`PAYMONGO_MOCK=true`), and print the receipt after it is confirmed. The listing stays Available until that payment is confirmed.
 - As an admin, open **Payments**, filter by status, and mark a `needs_refund` payment refunded. The audit log records it.
 - Leave the tenant and owner dashboards open and confirm reservations refresh about every 30 seconds. Notification bells show an unread count.
