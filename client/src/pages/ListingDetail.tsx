@@ -203,7 +203,13 @@ function ListingDetail() {
     setReserveMessage("");
     try {
       const response = await api.post("/payments/checkout", { reservationId: myReservation._id }, getAuthHeaders());
-      window.location.href = response.data.checkoutUrl;
+      const checkoutUrl = String(response.data.checkoutUrl || "");
+      const checkout = new URL(checkoutUrl, window.location.origin);
+      if (checkout.pathname.startsWith("/pay/mock/")) {
+        navigate(`${checkout.pathname}${checkout.search}${checkout.hash}`);
+      } else {
+        window.location.assign(checkoutUrl);
+      }
     } catch (err: any) {
       setReserveMessage(err.response?.data?.message || "Couldn't start payment.");
     }
@@ -279,7 +285,6 @@ function ListingDetail() {
       <div
         className="detail-hero"
         style={listing.imageUrl ? { backgroundImage: `url(${listing.imageUrl})` } : undefined}>
-        <PanoramaTour lat={listing.lat} lng={listing.lng} />
         {listing.verified && <span className="detail-verified-badge">Verified owner</span>}
         <button type="button" className="detail-tour-badge detail-tour-trigger" onClick={() => setTourOpen(true)}>
           Street View
