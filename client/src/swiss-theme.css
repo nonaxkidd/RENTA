@@ -506,3 +506,376 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
   .login-brand .eyebrow { color: #b5ee7c !important; }
   .login-panel .login-card { width: 100%; }
 }
+
+
+/* Dashboard and secondary-page pass.
+   Selectors below were checked against the current page components and CSS. */
+
+/* Shared dashboard typography and surfaces */
+.yt-shell, .odash-shell, .adash-shell {
+  min-height: 100vh;
+}
+.yt-main, .yt-content, .odash-main, .adash-main,
+.dash-main, .odash-content, .adash-content {
+  color: var(--sw-ink) !important;
+}
+.yt-shell h1, .yt-shell h2, .yt-shell h3,
+.odash-shell h1, .odash-shell h2, .odash-shell h3,
+.adash-shell h1, .adash-shell h2, .adash-shell h3 {
+  color: var(--sw-ink);
+}
+.yt-sidebar-item, .odash-sidebar-item, .adash-sidebar-item {
+  border-radius: 2px !important;
+}
+.yt-sidebar-item.active, .odash-sidebar-item.active, .adash-sidebar-item.active {
+  border-left: 3px solid var(--sw-green) !important;
+}
+.yt-sidebar-item.active .yt-sidebar-icon,
+.odash-sidebar-item.active .odash-sidebar-icon,
+.adash-sidebar-item.active .adash-sidebar-icon {
+  color: var(--sw-green) !important;
+}
+
+/* Tenant dashboard: search, filters, result cards and map/list split */
+.yt-shell .dash-topbar {
+  background: #fff !important;
+  border-bottom: 1px solid var(--sw-line) !important;
+  box-shadow: none !important;
+}
+.yt-shell .dash-welcome h1 {
+  color: var(--sw-ink) !important;
+}
+.yt-shell .dash-subtext,
+.yt-shell .sample-note,
+.yt-shell .result-meta,
+.yt-shell .compact-meta,
+.yt-shell .bracket-listing-meta,
+.yt-shell .bracket-viewed-note {
+  color: var(--sw-muted) !important;
+}
+.yt-shell .dash-search,
+.yt-shell .filter-row select,
+.yt-shell .filter-pill,
+.yt-shell .search-align-row input {
+  background: #fff !important;
+  color: var(--sw-ink) !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.yt-shell .filter-pill.active,
+.yt-shell .toggle-btn.active,
+.yt-shell .view-toggle button.active {
+  background: var(--sw-green) !important;
+  border-color: var(--sw-green) !important;
+  color: #fff !important;
+}
+.yt-shell .result-card,
+.yt-shell .compact-card,
+.yt-shell .bracket-listing-card,
+.yt-shell .profile-card {
+  background: #fff !important;
+  color: var(--sw-ink) !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.yt-shell .result-card:hover,
+.yt-shell .compact-card:hover,
+.yt-shell .bracket-listing-card:hover {
+  border-color: #b8c8bc !important;
+  box-shadow: var(--sw-shadow) !important;
+}
+.yt-shell .result-info,
+.yt-shell .bracket-listing-info,
+.yt-shell .profile-name,
+.yt-shell .profile-label {
+  color: var(--sw-ink) !important;
+}
+.yt-shell .result-price,
+.yt-shell .compact-price,
+.yt-shell .bracket-listing-price {
+  color: var(--sw-green) !important;
+}
+.yt-shell .verified-badge,
+.yt-shell .compact-verified,
+.yt-shell .bracket-verified-tag,
+.yt-shell .bracket-tour-badge {
+  background: var(--sw-green-soft) !important;
+  color: var(--sw-green) !important;
+  border: 1px solid #d2e0d5 !important;
+  border-radius: 2px !important;
+}
+.yt-shell .map-container-wrap,
+.yt-shell .map-split,
+.yt-shell .map-list-column {
+  border-color: var(--sw-line) !important;
+}
+.yt-shell .map-badge {
+  background: #fff !important;
+  color: var(--sw-green) !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+}
+.yt-shell .listing-tooltip,
+.yt-shell .leaflet-tooltip {
+  color: var(--sw-ink) !important;
+}
+.yt-shell .price-pin {
+  background: var(--sw-green) !important;
+  color: #fff !important;
+  border: 1px solid #fff !important;
+  border-radius: 2px !important;
+}
+.yt-shell .empty-state,
+.yt-shell .bracket-empty,
+.yt-shell .empty-text {
+  color: var(--sw-muted) !important;
+}
+
+/* Owner dashboard: listing management, forms, statuses and profile */
+.odash-shell .odash-header h1 {
+  color: var(--sw-ink) !important;
+}
+.odash-shell .odash-subtext,
+.odash-shell .odash-muted,
+.odash-shell .odash-hint,
+.odash-shell .odash-empty-text,
+.odash-shell .odash-listing-meta,
+.odash-shell .odash-profile-label {
+  color: var(--sw-muted) !important;
+}
+.odash-shell .odash-new-btn,
+.odash-shell .odash-submit-btn {
+  background: var(--sw-green) !important;
+  color: #fff !important;
+  border: 1px solid var(--sw-green) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.odash-shell .odash-new-btn:hover,
+.odash-shell .odash-submit-btn:hover {
+  background: var(--sw-green-dark) !important;
+}
+.odash-shell .odash-form,
+.odash-shell .odash-listing-card,
+.odash-shell .odash-profile-card {
+  background: #fff !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.odash-shell .odash-form-group label,
+.odash-shell .odash-profile-name,
+.odash-shell .odash-listing-title {
+  color: var(--sw-ink) !important;
+}
+.odash-shell .odash-form input,
+.odash-shell .odash-form select,
+.odash-shell .odash-form textarea {
+  color: var(--sw-ink) !important;
+  background: #fff !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.odash-shell .odash-listing-price {
+  color: var(--sw-green) !important;
+}
+.odash-shell .odash-badge.verified {
+  background: var(--sw-green-soft) !important;
+  color: var(--sw-green) !important;
+}
+.odash-shell .odash-badge.pending {
+  background: #f4efdf !important;
+  color: #77591e !important;
+}
+.odash-shell .odash-badge.rejected {
+  background: #f8e9e7 !important;
+  color: var(--sw-danger) !important;
+}
+.odash-shell .odash-pending-banner {
+  background: #f4efdf !important;
+  color: #684f1d !important;
+  border: 1px solid #e8dcc0 !important;
+}
+.odash-shell .odash-empty,
+.odash-shell .odash-empty-title {
+  color: var(--sw-muted) !important;
+}
+.odash-shell .odash-profile-logout {
+  background: #fff !important;
+  color: var(--sw-ink) !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+}
+
+/* Admin dashboard: metrics, moderation cards, tables, reports and modals */
+.adash-shell .adash-header h1,
+.adash-shell .adash-section-title,
+.adash-shell .adash-panel-title,
+.adash-shell .adash-card-name,
+.adash-shell .adash-listing-title,
+.adash-shell .adash-profile-value {
+  color: var(--sw-ink) !important;
+}
+.adash-shell .adash-subtext,
+.adash-shell .adash-muted,
+.adash-shell .adash-card-sub,
+.adash-shell .adash-card-meta,
+.adash-shell .adash-bar-label,
+.adash-shell .adash-profile-label,
+.adash-shell .adash-audit-target,
+.adash-shell .adash-empty-text {
+  color: var(--sw-muted) !important;
+}
+.adash-shell .adash-stat-card,
+.adash-shell .adash-card,
+.adash-shell .adash-panel,
+.adash-shell .adash-profile-card,
+.adash-shell .adash-notice {
+  background: #fff !important;
+  color: var(--sw-ink) !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.adash-shell .adash-stat-label,
+.adash-shell .adash-stat-value,
+.adash-shell .adash-attention-text,
+.adash-shell .adash-audit-action {
+  color: var(--sw-ink) !important;
+}
+.adash-shell .adash-chip,
+.adash-shell .adash-chip-count,
+.adash-shell .adash-badge {
+  border-radius: 2px !important;
+}
+.adash-shell .adash-badge.good {
+  background: var(--sw-green-soft) !important;
+  color: var(--sw-green) !important;
+}
+.adash-shell .adash-badge.warn {
+  background: #f4efdf !important;
+  color: #77591e !important;
+}
+.adash-shell .adash-badge.bad {
+  background: #f8e9e7 !important;
+  color: var(--sw-danger) !important;
+}
+.adash-shell .adash-btn.primary,
+.adash-shell .adash-actions .adash-btn.primary,
+.adash-shell .adash-modal-actions .adash-btn.primary {
+  background: var(--sw-green) !important;
+  color: #fff !important;
+  border: 1px solid var(--sw-green) !important;
+  border-radius: 2px !important;
+}
+.adash-shell .adash-btn.neutral,
+.adash-shell .adash-link-btn,
+.adash-shell .adash-profile-logout {
+  background: #fff !important;
+  color: var(--sw-ink) !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+}
+.adash-shell .adash-btn.danger {
+  border-radius: 2px !important;
+}
+.adash-shell .adash-table-wrap {
+  overflow-x: auto;
+  background: #fff !important;
+  border: 1px solid var(--sw-line) !important;
+}
+.adash-shell .adash-table {
+  color: var(--sw-ink) !important;
+}
+.adash-shell .adash-table th {
+  background: var(--sw-soft) !important;
+  color: var(--sw-ink) !important;
+  border-bottom: 1px solid var(--sw-line) !important;
+}
+.adash-shell .adash-table td {
+  color: #39463f !important;
+  border-bottom: 1px solid var(--sw-line) !important;
+}
+.adash-shell .adash-modal {
+  color: var(--sw-ink) !important;
+}
+.adash-shell .adash-modal-label {
+  color: var(--sw-ink) !important;
+}
+.adash-shell .adash-modal-error {
+  color: var(--sw-danger) !important;
+}
+
+/* Comparison and listing detail page text contrast */
+.cmpg-page, .detail-page {
+  color: var(--sw-ink) !important;
+}
+.cmpg-page .cmpg-eyebrow,
+.detail-page .detail-eyebrow {
+  color: var(--sw-green) !important;
+}
+.cmpg-page .cmpg-summary,
+.cmpg-page .cmpg-listing-sub,
+.cmpg-page .cmpg-label,
+.detail-page .detail-price-sub,
+.detail-page .detail-stat-label,
+.detail-page .detail-owner-sub,
+.detail-page .detail-map-note {
+  color: var(--sw-muted) !important;
+}
+.cmpg-page .cmpg-cell-value,
+.cmpg-page .cmpg-listing-title,
+.detail-page .detail-title-row h1,
+.detail-page .detail-section h2,
+.detail-page .detail-owner-name {
+  color: var(--sw-ink) !important;
+}
+.cmpg-page .cmpg-table,
+.cmpg-page .cmpg-listing-card,
+.detail-page .detail-owner-card,
+.detail-page .detail-review {
+  background: #fff !important;
+  border-color: var(--sw-line) !important;
+  color: var(--sw-ink) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+.cmpg-page .cmpg-tag,
+.cmpg-page .cmpg-chip,
+.detail-page .detail-tag,
+.detail-page .detail-verified-badge,
+.detail-page .detail-tour-badge {
+  background: var(--sw-green-soft) !important;
+  color: var(--sw-green) !important;
+  border-radius: 2px !important;
+}
+.detail-page .detail-back-button,
+.cmpg-page .cmpg-back {
+  color: var(--sw-green) !important;
+}
+.detail-page .detail-form label {
+  color: var(--sw-ink) !important;
+}
+.detail-page .detail-form input,
+.detail-page .detail-form select,
+.detail-page .detail-form textarea {
+  color: var(--sw-ink) !important;
+  background: #fff !important;
+}
+.detail-page .detail-submit,
+.cmpg-page .cmpg-primary {
+  background: var(--sw-green) !important;
+  color: #fff !important;
+}
+@media (max-width: 760px) {
+  .yt-shell .dash-main,
+  .odash-shell .odash-content,
+  .adash-shell .adash-content {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .adash-shell .adash-table-wrap { max-width: 100%; }
+}
