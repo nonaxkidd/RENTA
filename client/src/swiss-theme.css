@@ -312,3 +312,108 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+
+/* Landing-page contrast corrections.
+   Landing.css is imported by the page after the global theme, so these
+   scoped, explicit overrides keep the Swiss palette consistent. */
+.landing-page {
+  background: var(--sw-paper) !important;
+  color: var(--sw-ink) !important;
+}
+.landing-page .landing-nav {
+  background: var(--sw-paper) !important;
+  color: var(--sw-ink) !important;
+}
+.landing-page .logo-name {
+  color: var(--sw-ink) !important;
+}
+.landing-page .logo-tag {
+  color: var(--sw-muted) !important;
+  border-left-color: var(--sw-line) !important;
+}
+.landing-page .nav-links a {
+  color: var(--sw-ink) !important;
+}
+.landing-page .nav-links .nav-signin {
+  color: var(--sw-green) !important;
+}
+.landing-page .hero {
+  background: var(--sw-paper) !important;
+  color: var(--sw-ink) !important;
+}
+.landing-page .hero-text h1 {
+  color: var(--sw-ink) !important;
+}
+.landing-page .hero-description,
+.landing-page .hero-stats {
+  color: var(--sw-muted) !important;
+}
+.landing-page .hero-stats strong {
+  color: var(--sw-ink) !important;
+}
+.landing-page .hero-search input {
+  color: var(--sw-ink) !important;
+  background: #fff !important;
+}
+.landing-page .hero-search input::placeholder {
+  color: #77827b !important;
+  opacity: 1;
+}
+.landing-page .listings-section {
+  background: var(--sw-paper) !important;
+  color: var(--sw-ink) !important;
+}
+.landing-page .listings-heading h2 {
+  color: var(--sw-ink) !important;
+}
+.landing-page .carousel-controls button {
+  color: var(--sw-ink) !important;
+  border-color: var(--sw-line) !important;
+  background: #fff !important;
+}
+.landing-page .carousel-controls button:hover {
+  color: var(--sw-green) !important;
+  border-color: var(--sw-green) !important;
+}
+.landing-page .listing-meta,
+.landing-page .listing-footer {
+  color: var(--sw-muted) !important;
+}
+.landing-page .listing-info h3 {
+  color: var(--sw-ink) !important;
+}
+.landing-page .listing-footer {
+  border-top-color: var(--sw-line) !important;
+}
+.landing-page .carousel-dots .dot {
+  background: #cbd3cc !important;
+}
+.landing-page .carousel-dots .dot.active {
+  background: var(--sw-green) !important;
+}
+.landing-page section.owner-cta {
+  background: var(--sw-green-soft) !important;
+  color: var(--sw-ink) !important;
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+}
+.landing-page .owner-cta h2,
+.landing-page .owner-cta p {
+  color: var(--sw-ink) !important;
+}
+.landing-page .owner-cta .section-eyebrow.light {
+  color: var(--sw-green) !important;
+}
+.landing-page .owner-cta .cta-button {
+  background: var(--sw-green) !important;
+  color: #fff !important;
+}
+.landing-page .landing-footer {
+  background: var(--sw-paper) !important;
+  color: var(--sw-muted) !important;
+  border-top-color: var(--sw-line) !important;
+}
+.landing-page .landing-footer .footer-logo {
+  color: var(--sw-ink) !important;
+}
