@@ -1353,3 +1353,11 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
   .login-panel { padding-left: 10px !important; padding-right: 10px !important; }
   .login-panel .login-card { padding: 18px 14px !important; }
 }
+
+
+/* Keep the landing-page Sign in label readable on its green hover background. */
+.landing-page .landing-nav .nav-links a.nav-signin:hover,
+.landing-page .landing-nav .nav-links a.nav-signin:focus-visible {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
