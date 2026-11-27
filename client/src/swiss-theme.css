@@ -873,3 +873,207 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
   }
   .adash-shell .adash-table-wrap { max-width: 100%; }
 }
+
+
+/* Localhost visual fixes based on the reported screens. */
+.detail-nav .detail-logo .logo-name {
+  color: var(--sw-ink) !important;
+}
+
+.login-panel .login-card {
+  box-sizing: border-box;
+  width: min(100%, 480px);
+  padding: clamp(24px, 3vw, 40px) !important;
+  border: 1px solid var(--sw-line) !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.login-panel .login-heading h2 {
+  font-size: clamp(36px, 4vw, 44px) !important;
+  line-height: 1.05 !important;
+}
+.login-panel .login-heading {
+  margin-bottom: 28px !important;
+}
+.login-panel .login-form {
+  gap: 18px !important;
+}
+.login-panel .login-button {
+  min-height: 50px;
+}
+.login-panel .demo-logins {
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.landing-page .carousel-track {
+  align-items: stretch;
+}
+.landing-page .listing-thumb {
+  height: 220px;
+  background: var(--sw-soft) !important;
+  overflow: hidden;
+}
+.landing-page .listing-thumb-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.landing-page .listing-thumb-placeholder {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  background: var(--sw-soft);
+  color: var(--sw-muted);
+  font-size: 13px;
+}
+.landing-page .tour-badge {
+  z-index: 2;
+}
+
+.odash-listing-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.odash-listing-actions .odash-listing-action {
+  display: inline-flex !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 13px !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  font-weight: 650 !important;
+}
+.odash-listing-actions .odash-listing-action.danger {
+  background: #fff !important;
+  color: var(--sw-danger) !important;
+  border-color: #e8c9c6 !important;
+}
+.odash-listing-actions .odash-listing-action.danger:hover {
+  background: #fbefee !important;
+}
+
+.yt-reservation-card {
+  margin: 0 0 16px;
+  padding: 22px 24px;
+  background: #fff;
+  border: 1px solid var(--sw-line);
+  border-radius: 2px;
+  box-shadow: none;
+}
+.yt-reservation-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.yt-reservation-heading h3 {
+  margin: 0;
+  color: var(--sw-ink) !important;
+  font-size: 20px;
+  letter-spacing: -.035em;
+}
+.yt-reservation-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid var(--sw-line);
+  background: var(--sw-soft);
+  color: var(--sw-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: capitalize;
+}
+.yt-reservation-status.status-confirmed {
+  background: var(--sw-green-soft);
+  border-color: #cdddcf;
+  color: var(--sw-green);
+}
+.yt-reservation-status.status-payment_pending {
+  background: #fff5e7;
+  border-color: #ead8b8;
+  color: #81551b;
+}
+.yt-reservation-status.status-cancelled,
+.yt-reservation-status.status-rejected {
+  background: #f9eeed;
+  border-color: #e8cecb;
+  color: var(--sw-danger);
+}
+.yt-reservation-location {
+  margin: 8px 0 0;
+  color: var(--sw-muted) !important;
+  font-size: 14px;
+}
+.yt-reservation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.yt-reservation-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 15px;
+  border: 1px solid var(--sw-line);
+  border-radius: 2px;
+  background: #fff;
+  color: var(--sw-ink);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.yt-reservation-button.primary {
+  background: var(--sw-green);
+  border-color: var(--sw-green);
+  color: #fff;
+}
+.yt-reservation-button.primary:hover {
+  background: var(--sw-green-dark);
+}
+.yt-reservation-button.secondary:hover {
+  border-color: var(--sw-green);
+  color: var(--sw-green);
+}
+.yt-reservation-receipt {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--sw-line);
+  border-left: 3px solid var(--sw-green);
+  background: #fafbf9;
+  color: var(--sw-ink);
+}
+.yt-reservation-receipt p {
+  margin: 5px 0;
+  color: var(--sw-muted);
+  font-size: 13px;
+}
+.yt-reservation-receipt .yt-reservation-receipt-label {
+  margin: 0 0 9px;
+  color: var(--sw-green);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .12em;
+}
+.yt-reservation-receipt .yt-reservation-receipt-title {
+  color: var(--sw-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+@media (max-width: 600px) {
+  .login-panel .login-card { padding: 22px !important; }
+  .yt-reservation-card { padding: 17px; }
+}
