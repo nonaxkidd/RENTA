@@ -850,11 +850,6 @@ function AdminDashboard() {
           subtitle="Review the identity and authority documents owners submit. Every decision is saved to the audit trail."
         />
 
-        <div className="adash-notice">
-          <strong>Prototype note:</strong> documents are submitted as links. Use sample documents
-          only — never real IDs — until protected, reviewer-only file storage is in place.
-        </div>
-
         {renderAsync(owners, ({ owners: list }) => {
           const counts: Record<string, number> = {};
           list.forEach((owner) => {

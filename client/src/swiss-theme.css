@@ -171,7 +171,6 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
 }
 .login-button:hover { background: var(--sw-green-dark) !important; }
 .auth-back, .forgot-button { color: var(--sw-green) !important; }
-.demo-logins { border-top: 1px solid var(--sw-line); }
 
 /* Tenant dashboard */
 .yt-shell, .odash-shell, .adash-shell {
@@ -467,19 +466,6 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
 }
 .login-panel .login-note {
   color: #68756d !important;
-}
-.login-panel .demo-logins span {
-  color: var(--sw-muted) !important;
-}
-.login-panel .demo-logins button {
-  border: 1px solid var(--sw-line) !important;
-  border-radius: 2px !important;
-  background: #fff !important;
-  color: var(--sw-ink) !important;
-}
-.login-panel .demo-logins button:hover {
-  border-color: var(--sw-green) !important;
-  color: var(--sw-green) !important;
 }
 .login-panel .role-option {
   border: 1px solid var(--sw-line) !important;
@@ -901,10 +887,6 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
 .login-panel .login-button {
   min-height: 50px;
 }
-.login-panel .demo-logins {
-  margin-top: 18px;
-  padding-top: 16px;
-}
 
 .landing-page .carousel-track {
   align-items: stretch;
@@ -1258,13 +1240,6 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
     min-height: 48px;
     padding: 12px 15px;
     font-size: 15px;
-  }
-  .login-panel .demo-logins {
-    gap: 8px;
-  }
-  .login-panel .demo-logins button {
-    min-height: 40px;
-    padding: 8px 11px;
   }
   .login-panel .register-prompt {
     flex-direction: row;

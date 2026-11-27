@@ -8,15 +8,6 @@ import "./Login.css";
 
 type Mode = "login" | "verify" | "forgot" | "reset";
 
-const demoLogins = import.meta.env.DEV
-  ? [
-      { label: "Tenant", email: "tenant@gmail.com", password: "Tenant12345!" },
-      { label: "Owner", email: "owner@gmail.com", password: "Owner12345!" },
-      { label: "Admin", email: "admin@renta.local", password: "Admin12345!" },
-      { label: "Superadmin", email: "superadmin@renta.local", password: "SuperAdmin12345!" },
-    ]
-  : [];
-
 function Login() {
   const navigate = useNavigate();
 
@@ -265,17 +256,6 @@ function Login() {
               <span>{mode === "forgot" ? "Send code" : mode === "reset" ? "Save password" : mode === "verify" ? "Verify" : "Sign in"}</span>
               <span className="button-arrow">→</span>
             </button>
-
-            {mode === "login" && demoLogins.length > 0 && (
-              <div className="demo-logins">
-                <span>Demo</span>
-                {demoLogins.map((account) => (
-                  <button key={account.email} type="button" onClick={() => void signIn(account.email, account.password)}>
-                    {account.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </form>
 
           {(mode === "forgot" || mode === "reset" || mode === "verify") && (
