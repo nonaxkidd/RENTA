@@ -1249,39 +1249,7 @@ function AdminDashboard() {
                   ))}
                 </div>
               </div>
-              {editingId && (
-                <form
-                  className="adash-inline-form"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    saveUserEdits();
-                  }}
-                >
-                  <h2 className="adash-panel-title">Recover or edit account</h2>
-                  <input value={editForm.firstName} onChange={(event) => setEditForm({ ...editForm, firstName: event.target.value })} required />
-                  <input value={editForm.lastName} onChange={(event) => setEditForm({ ...editForm, lastName: event.target.value })} required />
-                  <input type="email" value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} required />
-                  <input placeholder="09XXXXXXXXX" value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} required />
-                  {user.role === "superadmin" && (
-                    <select value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value })}>
-                      <option value="tenant">Tenant</option>
-                      <option value="owner">Owner</option>
-                      <option value="admin">Admin</option>
-                      <option value="superadmin">Superadmin</option>
-                    </select>
-                  )}
-                  <input type="password" placeholder="New password (optional)" value={editForm.newPassword} onChange={(event) => setEditForm({ ...editForm, newPassword: event.target.value })} />
-                  <input type="password" placeholder="Your admin password (required to reset password)" value={editForm.adminPassword} onChange={(event) => setEditForm({ ...editForm, adminPassword: event.target.value })} />
-                  <input placeholder="Reason for deactivate or archive" value={editForm.note} onChange={(event) => setEditForm({ ...editForm, note: event.target.value })} />
-                  <div className="adash-user-actions">
-                    <button className="adash-btn primary" disabled={userBusy}>Save edits</button>
-                    <button type="button" className="adash-btn danger" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "deactivate")}>Deactivate</button>
-                    <button type="button" className="adash-btn neutral" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "reactivate")}>Activate</button>
-                    <button type="button" className="adash-btn danger" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "archive")}>Archive</button>
-                    <button type="button" className="adash-btn neutral" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "restore")}>Restore</button>
-                  </div>
-                </form>
-              )}
+
             </>
           );
         })}
@@ -1502,6 +1470,109 @@ function AdminDashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {activeView === "users" && editingId && (
+        <div
+          className="adash-modal-overlay"
+          onClick={() => {
+            if (!userBusy) setEditingId(null);
+          }}
+        >
+          <section
+            className="adash-modal adash-user-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="adash-user-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="adash-user-modal-header">
+              <div>
+                <p className="adash-eyebrow">USER MANAGEMENT</p>
+                <h3 id="adash-user-modal-title">Edit user account</h3>
+                <p className="adash-modal-target">
+                  Update {editForm.firstName} {editForm.lastName}’s account details and access.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="adash-user-modal-close"
+                onClick={() => setEditingId(null)}
+                disabled={userBusy}
+                aria-label="Close edit user dialog"
+              >
+                ×
+              </button>
+            </div>
+
+            <form
+              className="adash-user-edit-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveUserEdits();
+              }}
+            >
+              <div className="adash-user-edit-grid">
+                <label>
+                  First name
+                  <input value={editForm.firstName} onChange={(event) => setEditForm({ ...editForm, firstName: event.target.value })} required />
+                </label>
+                <label>
+                  Last name
+                  <input value={editForm.lastName} onChange={(event) => setEditForm({ ...editForm, lastName: event.target.value })} required />
+                </label>
+                <label>
+                  Email address
+                  <input type="email" value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} required />
+                </label>
+                <label>
+                  Phone number
+                  <input placeholder="09XXXXXXXXX" value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} required />
+                </label>
+                {user.role === "superadmin" && (
+                  <label>
+                    Account role
+                    <select value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value })}>
+                      <option value="tenant">Tenant</option>
+                      <option value="owner">Owner</option>
+                      <option value="admin">Admin</option>
+                      <option value="superadmin">Superadmin</option>
+                    </select>
+                  </label>
+                )}
+                <label>
+                  New password <span>(optional)</span>
+                  <input type="password" placeholder="Leave blank to keep current password" value={editForm.newPassword} onChange={(event) => setEditForm({ ...editForm, newPassword: event.target.value })} />
+                </label>
+                <label>
+                  Your admin password <span>(required only for password reset)</span>
+                  <input type="password" placeholder="Confirm your password to reset" value={editForm.adminPassword} onChange={(event) => setEditForm({ ...editForm, adminPassword: event.target.value })} />
+                </label>
+                <label className="adash-user-edit-note">
+                  Reason for deactivation or archive
+                  <input placeholder="Enter a reason when changing account status" value={editForm.note} onChange={(event) => setEditForm({ ...editForm, note: event.target.value })} />
+                </label>
+              </div>
+
+              {userMessage && <p className="adash-modal-error">{userMessage}</p>}
+
+              <div className="adash-user-modal-footer">
+                <div className="adash-user-actions">
+                  <button type="button" className="adash-btn danger" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "deactivate")}>Deactivate</button>
+                  <button type="button" className="adash-btn neutral" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "reactivate")}>Activate</button>
+                  <button type="button" className="adash-btn danger" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "archive")}>Archive</button>
+                  <button type="button" className="adash-btn neutral" disabled={userBusy} onClick={() => changeAccountStatus(editingId, "restore")}>Restore</button>
+                </div>
+                <div className="adash-modal-actions">
+                  <button type="button" className="adash-btn neutral" onClick={() => setEditingId(null)} disabled={userBusy}>Cancel</button>
+                  <button type="submit" className="adash-btn primary" disabled={userBusy}>
+                    {userBusy ? "Saving…" : "Save changes"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
         </div>
       )}
     </div>
