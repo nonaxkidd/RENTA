@@ -90,6 +90,14 @@
   row-gap: 13px !important;
 }
 
+.login-panel .register-card .register-form:has(#otp) {
+  grid-template-columns: 1fr;
+}
+
+.login-panel .register-card .register-form:has(#otp) > * {
+  grid-column: 1;
+}
+
 .login-panel .register-card .register-form > .name-row,
 .login-panel .register-card .register-form > .form-group:nth-child(6),
 .login-panel .register-card .register-form > .login-message,
