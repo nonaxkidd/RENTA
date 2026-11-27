@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { MapContainer, TileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { LockToCalapan } from "../components/BarangayPinMap";
-import PanoramaTour from "../components/PanoramaTour";
 import api from "../services/api";
 import "./Landing.css";
 
@@ -54,21 +53,21 @@ function Landing() {
   const barangaysMappedCount = new Set(shownListings.map((listing) => listing.barangay)).size;
 
   // Clones: last 3 real cards glued to the front, first 3 glued to the end
-  const extendedListings =
-    shownListings.length > 0
-      ? [
-          ...shownListings.slice(-cardsPerView),
-          ...shownListings,
-          ...shownListings.slice(0, cardsPerView),
-        ]
-      : [];
+  const shouldLoop = shownListings.length > cardsPerView;
+  const extendedListings = shouldLoop
+    ? [
+        ...shownListings.slice(-cardsPerView),
+        ...shownListings,
+        ...shownListings.slice(0, cardsPerView),
+      ]
+    : shownListings;
 
   const next = () => setIndex((i) => i + 1);
   const prev = () => setIndex((i) => i - 1);
 
   useEffect(() => {
-    setIndex(cardsPerView);
-  }, [cardsPerView]);
+    setIndex(shownListings.length > cardsPerView ? cardsPerView : 0);
+  }, [cardsPerView, shownListings.length]);
 
   // Fetch real listings from MongoDB via the backend
   useEffect(() => {
@@ -122,14 +121,14 @@ function Landing() {
   }, [listings, carouselLoading]);
 
   useEffect(() => {
-    if (paused || listings.length === 0) return;
+    if (paused || listings.length <= cardsPerView) return;
     const timer = setInterval(next, 4000);
     return () => clearInterval(timer);
-  }, [paused, listings]);
+  }, [paused, listings, cardsPerView]);
 
   // Silently snap back when we scroll onto a clone, so the loop feels seamless
   useEffect(() => {
-    if (listings.length === 0) return;
+    if (listings.length <= cardsPerView) return;
     if (index === cardsPerView + listings.length) {
       const timeout = setTimeout(() => {
         setTransition(false);
@@ -154,10 +153,9 @@ function Landing() {
     }
   }, [transition]);
 
-  const realIndex =
-    listings.length > 0
-      ? ((index - cardsPerView) % listings.length + listings.length) % listings.length
-      : 0;
+  const realIndex = shouldLoop
+    ? ((index - cardsPerView) % listings.length + listings.length) % listings.length
+    : index;
 
   return (
     <div className="landing-page">
@@ -239,10 +237,12 @@ function Landing() {
             <span className="section-eyebrow">Freshly reviewed</span>
             <h2>Places with the details in view.</h2>
           </div>
-          <div className="carousel-controls">
-            <button onClick={prev} aria-label="Previous listing">←</button>
-            <button onClick={next} aria-label="Next listing">→</button>
-          </div>
+          {shouldLoop && (
+            <div className="carousel-controls">
+              <button type="button" onClick={prev} aria-label="Previous listing">←</button>
+              <button type="button" onClick={next} aria-label="Next listing">→</button>
+            </div>
+          )}
         </div>
 
         <div
@@ -278,11 +278,21 @@ function Landing() {
                   to={`/listings/${listing._id}`}
                   className="listing-card"
                   key={`${listing._id}-${i}`}
-                  style={{ width: cardStep - GAP }}
+                  style={{ width: shownListings.length <= cardsPerView ? Math.min(cardStep - GAP, 420) : cardStep - GAP }}
                 >
                   <div className="listing-thumb">
-                    <PanoramaTour lat={listing.lat} lng={listing.lng} interactive={false} />
-                    <span className="tour-badge">Street View</span>
+                    {listing.imageUrl ? (
+                      <img
+                        className="listing-thumb-image"
+                        src={listing.imageUrl}
+                        alt={listing.title}
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="listing-thumb-placeholder" aria-label="No listing photo available">
+                        Photo unavailable
+                      </div>
+                    )}
                     {listing.verified && <span className="verified-pill">Verified owner</span>}
                   </div>
                   <div className="listing-info">
