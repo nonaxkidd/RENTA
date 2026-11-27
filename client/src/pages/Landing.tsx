@@ -318,7 +318,7 @@ function Landing() {
               <button
                 key={listing._id}
                 className={i === realIndex ? "dot active" : "dot"}
-                onClick={() => setIndex(i + cardsPerView)}
+                onClick={() => setIndex(shouldLoop ? i + cardsPerView : i)}
                 aria-label={`Go to listing ${i + 1}`}
               />
             ))}
