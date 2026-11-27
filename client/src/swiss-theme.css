@@ -1077,3 +1077,279 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
   .login-panel .login-card { padding: 22px !important; }
   .yt-reservation-card { padding: 17px; }
 }
+
+
+/* Mobile layout refinements for real-device Dev Tunnel testing */
+@media (max-width: 760px) {
+  html, body, #root {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .landing-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+    padding: 14px 16px;
+  }
+  .landing-nav .nav-logo {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .landing-nav .logo-tag {
+    font-size: 9px;
+    letter-spacing: .12em;
+    padding-left: 8px;
+  }
+  .landing-nav .nav-links {
+    display: flex;
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 10px 18px;
+    font-size: 13px;
+  }
+  .landing-nav .nav-signin {
+    padding: 7px 12px !important;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px;
+    padding: 34px 16px 42px;
+  }
+  .hero-text, .hero-text h1, .hero-description {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .hero-text h1 {
+    font-size: clamp(38px, 10.5vw, 54px) !important;
+    line-height: 1.02 !important;
+    letter-spacing: -.065em !important;
+  }
+  .hero-description {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .hero-search {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-width: none;
+    padding: 8px !important;
+  }
+  .hero-search input {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    font-size: 16px;
+  }
+  .hero-search button {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    font-size: 12px;
+  }
+  .hero-stats > * { min-width: 0; }
+  .hero-map {
+    width: 100%;
+    height: min(58vh, 360px);
+    min-height: 240px;
+  }
+
+  .listings-section {
+    padding: 34px 16px 48px !important;
+  }
+  .listings-heading {
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .listings-heading h2 {
+    font-size: clamp(26px, 7vw, 34px) !important;
+  }
+  .carousel-controls { flex-shrink: 0; }
+  .carousel-track { gap: 12px; }
+  .landing-page .carousel-track > * {
+    flex: 0 0 min(84vw, 330px);
+    min-width: 0;
+  }
+  .landing-page .listing-thumb { height: 190px; }
+  .carousel-viewport { overflow-x: auto; overscroll-behavior-x: contain; }
+  .carousel-viewport::-webkit-scrollbar { display: none; }
+
+  .owner-cta {
+    margin: 0 16px 36px;
+    padding: 28px 22px;
+    gap: 18px;
+  }
+  .owner-cta h2 {
+    font-size: clamp(25px, 7vw, 32px);
+  }
+  .cta-button { width: 100%; justify-content: center; }
+  .landing-footer { padding: 24px 16px 30px; }
+
+  .login-page {
+    display: block !important;
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+  .login-brand { display: none !important; }
+  .login-panel {
+    box-sizing: border-box;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding: 20px 14px 32px !important;
+  }
+  .login-panel .login-card {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 480px !important;
+    margin: 0 auto;
+    padding: 22px 18px !important;
+  }
+  .login-panel .mobile-logo {
+    display: flex !important;
+    margin: 0 0 28px !important;
+  }
+  .login-panel .login-heading {
+    margin-bottom: 24px !important;
+  }
+  .login-panel .login-heading h2 {
+    font-size: clamp(34px, 10vw, 42px) !important;
+    line-height: 1.04 !important;
+  }
+  .login-panel .login-heading p {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .login-panel .login-form {
+    gap: 16px !important;
+  }
+  .login-panel .form-group input,
+  .login-panel .login-form input,
+  .login-panel .login-form select {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 13px;
+    font-size: 16px !important;
+  }
+  .login-panel .login-button {
+    min-height: 48px;
+    padding: 12px 15px;
+    font-size: 15px;
+  }
+  .login-panel .demo-logins {
+    gap: 8px;
+  }
+  .login-panel .demo-logins button {
+    min-height: 40px;
+    padding: 8px 11px;
+  }
+  .login-panel .register-prompt {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 20px;
+  }
+  .login-panel .login-note {
+    margin-top: 18px;
+  }
+  .login-panel .register-card .register-form {
+    display: flex !important;
+    flex-direction: column;
+    gap: 14px !important;
+  }
+  .login-panel .register-card .name-row {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .login-panel .register-card .role-toggle {
+    display: flex;
+    flex-direction: column;
+  }
+  .login-panel .register-card .role-option {
+    width: 100%;
+    min-height: 54px;
+  }
+
+  .yt-shell .dash-main,
+  .odash-shell .odash-content,
+  .adash-shell .adash-content {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 22px 14px !important;
+  }
+  .yt-shell .dash-welcome h1,
+  .odash-shell .odash-header h1,
+  .adash-shell .adash-header h1 {
+    font-size: clamp(26px, 7vw, 34px) !important;
+    line-height: 1.1;
+  }
+  .yt-shell .results-grid,
+  .odash-shell .odash-listing-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .yt-shell .result-card,
+  .odash-shell .odash-listing-card,
+  .adash-shell .adash-card,
+  .adash-shell .adash-panel {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .yt-shell .filter-row {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .yt-shell .filter-row > *,
+  .yt-shell .dash-search {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .yt-shell .yt-reservation-card {
+    padding: 16px;
+  }
+  .yt-shell .yt-reservation-actions > button {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+  .detail-page .detail-content,
+  .detail-page .detail-main,
+  .detail-page .detail-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-width: 0;
+  }
+  .detail-page .detail-title-row h1 {
+    font-size: clamp(26px, 7vw, 34px) !important;
+  }
+  .adash-shell .adash-table-wrap { max-width: 100%; overflow-x: auto; }
+}
+
+@media (max-width: 380px) {
+  .landing-nav .logo-tag { display: none; }
+  .landing-nav .nav-links { gap: 9px 13px; font-size: 12px; }
+  .login-panel { padding-left: 10px !important; padding-right: 10px !important; }
+  .login-panel .login-card { padding: 18px 14px !important; }
+}

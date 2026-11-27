@@ -1,7 +1,15 @@
 import axios from "axios";
 
+// VITE_API_URL is injected by Vite at build/dev-server start.
+// On a phone, localhost points to the phone itself, so use the backend
+// Dev Tunnel URL in client/.env.local when testing from another device.
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const apiBaseUrl = (
+  configuredApiUrl || "http://localhost:5000/api/v1"
+).replace(/\/+$/, "");
+
 const api = axios.create({
-  baseURL: "http://localhost:5000/api/v1",
+  baseURL: apiBaseUrl,
   headers: {
     "Content-Type": "application/json",
   },

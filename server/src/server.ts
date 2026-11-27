@@ -29,16 +29,21 @@ if (Number.isFinite(trustProxy) && trustProxy > 0) {
 
 const PORT = Number(process.env.PORT) || 5000;
 
-const devOrigins = ["http://127.0.0.1:5173", "http://localhost:5173"];
-const allowedOrigins = new Set<string>();
-if (process.env.CLIENT_ORIGIN) allowedOrigins.add(process.env.CLIENT_ORIGIN);
+const normalizeOrigin = (value: string) => value.trim().replace(/\/+$/, "");
+const allowedOrigins = new Set(
+  (process.env.CLIENT_ORIGIN || "")
+    .split(",")
+    .map(normalizeOrigin)
+    .filter(Boolean)
+);
 if (process.env.NODE_ENV !== "production") {
-  for (const origin of devOrigins) allowedOrigins.add(origin);
+  allowedOrigins.add("http://127.0.0.1:5173");
+  allowedOrigins.add("http://localhost:5173");
 }
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) {
+    if (!origin || allowedOrigins.has(normalizeOrigin(origin))) {
       callback(null, true);
       return;
     }
