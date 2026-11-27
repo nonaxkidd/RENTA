@@ -954,28 +954,58 @@ function TenantDashboard() {
                 const listing = reservation.unitId;
                 const amount = reservation.downPaymentAmount || listing?.price || 0;
                 return (
-                  <article key={reservation._id} className="listing-card" style={{ marginBottom: 16, padding: 16 }}>
-                    <h3>{listing?.title || "Listing"}</h3>
-                    <p>{listing?.barangay} · {reservation.queueStatus.replaceAll("_", " ")}</p>
-                    {reservation.queueStatus === "payment_pending" && (
-                      <button type="button" onClick={() => api.post("/payments/checkout", { reservationId: reservation._id }).then((response) => { window.location.href = response.data.checkoutUrl; }).catch((error) => setReservationMessage(error.response?.data?.message || "Couldn't start payment."))}>
-                        Pay down payment
-                      </button>
-                    )}
-                    {(reservation.queueStatus === "queued" || reservation.queueStatus === "payment_pending") && (
-                      <button type="button" onClick={() => api.patch(`/reservations/${reservation._id}/cancel`, {}, getAuthHeaders()).then(() => setMyReservations((current) => current.map((item) => item._id === reservation._id ? { ...item, queueStatus: "cancelled" } : item)))}>
-                        Cancel
-                      </button>
-                    )}
+                  <article key={reservation._id} className="yt-reservation-card">
+                    <div className="yt-reservation-heading">
+                      <h3>{listing?.title || "Listing"}</h3>
+                      <span className={`yt-reservation-status status-${reservation.queueStatus}`}>
+                        {reservation.queueStatus.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    <p className="yt-reservation-location">{listing?.barangay || "Calapan City"}</p>
+                    <div className="yt-reservation-actions">
+                      {reservation.queueStatus === "payment_pending" && (
+                        <button
+                          type="button"
+                          className="yt-reservation-button primary"
+                          onClick={async () => {
+                            try {
+                              const response = await api.post("/payments/checkout", { reservationId: reservation._id }, getAuthHeaders());
+                              const checkoutUrl = String(response.data.checkoutUrl || "");
+                              const checkout = new URL(checkoutUrl, window.location.origin);
+                              if (checkout.pathname.startsWith("/pay/mock/")) {
+                                navigate(`${checkout.pathname}${checkout.search}${checkout.hash}`);
+                              } else {
+                                window.location.assign(checkoutUrl);
+                              }
+                            } catch (error: any) {
+                              setReservationMessage(error.response?.data?.message || "Couldn't start payment.");
+                            }
+                          }}
+                        >
+                          Pay down payment
+                        </button>
+                      )}
+                      {(reservation.queueStatus === "queued" || reservation.queueStatus === "payment_pending") && (
+                        <button
+                          type="button"
+                          className="yt-reservation-button secondary"
+                          onClick={() => api.patch(`/reservations/${reservation._id}/cancel`, {}, getAuthHeaders()).then(() => setMyReservations((current) => current.map((item) => item._id === reservation._id ? { ...item, queueStatus: "cancelled" } : item)))}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      {reservation.queueStatus === "confirmed" && (
+                        <button type="button" className="yt-reservation-button secondary" onClick={() => window.print()}>
+                          Print receipt
+                        </button>
+                      )}
+                    </div>
                     {reservation.queueStatus === "confirmed" && (
-                      <button type="button" onClick={() => window.print()}>Print receipt</button>
-                    )}
-                    {reservation.queueStatus === "confirmed" && (
-                      <div className="receipt">
-                        <p>RENTA receipt</p>
-                        <p>{listing?.title}</p>
-                        <p>Down payment: ₱{amount.toLocaleString()}</p>
-                        <p>Status: confirmed</p>
+                      <div className="yt-reservation-receipt">
+                        <p className="yt-reservation-receipt-label">RENTA RECEIPT</p>
+                        <p className="yt-reservation-receipt-title">{listing?.title}</p>
+                        <p>Down payment: <strong>₱{amount.toLocaleString()}</strong></p>
+                        <p>Status: <strong>Confirmed</strong></p>
                       </div>
                     )}
                   </article>
