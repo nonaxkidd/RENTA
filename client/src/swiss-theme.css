@@ -417,3 +417,92 @@ hr { border: 0; border-top: 1px solid var(--sw-line); }
 .landing-page .landing-footer .footer-logo {
   color: var(--sw-ink) !important;
 }
+
+
+/* Authentication contrast and form refinements.
+   Keep the dark brand panel readable while retaining the light Swiss form panel. */
+.login-brand .eyebrow {
+  color: #b5ee7c !important;
+}
+.login-brand .logo-name {
+  color: #ffffff !important;
+}
+.login-brand .login-brand-content h1 {
+  color: #f7f8f5 !important;
+}
+.login-brand .login-brand-content h1 span {
+  color: #b5ee7c !important;
+}
+.login-brand .brand-description {
+  color: rgba(255, 255, 255, .82) !important;
+}
+.login-brand .login-footer {
+  color: rgba(255, 255, 255, .68) !important;
+}
+.login-panel {
+  background: var(--sw-paper) !important;
+  color: var(--sw-ink) !important;
+}
+.login-panel .login-heading h2 {
+  color: var(--sw-ink) !important;
+}
+.login-panel .login-heading > p:not(.login-eyebrow) {
+  color: var(--sw-muted) !important;
+}
+.login-panel .form-group label,
+.login-panel .password-label label {
+  color: var(--sw-ink) !important;
+}
+.login-panel .form-group input::placeholder {
+  color: #87938c !important;
+  opacity: 1;
+}
+.login-panel .register-prompt {
+  color: var(--sw-muted) !important;
+}
+.login-panel .register-prompt a,
+.login-panel .auth-back,
+.login-panel .forgot-button {
+  color: var(--sw-green) !important;
+}
+.login-panel .login-note {
+  color: #68756d !important;
+}
+.login-panel .demo-logins span {
+  color: var(--sw-muted) !important;
+}
+.login-panel .demo-logins button {
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+  background: #fff !important;
+  color: var(--sw-ink) !important;
+}
+.login-panel .demo-logins button:hover {
+  border-color: var(--sw-green) !important;
+  color: var(--sw-green) !important;
+}
+.login-panel .role-option {
+  border: 1px solid var(--sw-line) !important;
+  border-radius: 2px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.login-panel .role-option .role-title {
+  color: var(--sw-ink) !important;
+}
+.login-panel .role-option .role-sub {
+  color: var(--sw-muted) !important;
+}
+.login-panel .role-option:hover,
+.login-panel .role-option.active {
+  border-color: var(--sw-green) !important;
+  background: var(--sw-green-soft) !important;
+  box-shadow: none !important;
+}
+.login-panel .role-option.active .role-title {
+  color: var(--sw-green) !important;
+}
+@media (max-width: 900px) {
+  .login-brand .eyebrow { color: #b5ee7c !important; }
+  .login-panel .login-card { width: 100%; }
+}
