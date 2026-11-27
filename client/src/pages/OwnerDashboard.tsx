@@ -546,8 +546,10 @@ function OwnerDashboard() {
                     {listing.reviewNote && !listing.verified && (
                       <p className="odash-hint">Disapproval comment: {listing.reviewNote}</p>
                     )}
-                    <button type="button" className="odash-new-btn" onClick={() => openEditor(listing)}>Edit</button>
-                    <button type="button" className="odash-new-btn" onClick={() => removeListing(listing._id)}>Remove</button>
+                    <div className="odash-listing-actions">
+                      <button type="button" className="odash-new-btn odash-listing-action" onClick={() => openEditor(listing)}>Edit</button>
+                      <button type="button" className="odash-new-btn odash-listing-action danger" onClick={() => removeListing(listing._id)}>Remove</button>
+                    </div>
                   </div>
                 </div>
               ))}
